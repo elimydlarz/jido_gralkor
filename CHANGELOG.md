@@ -1,5 +1,19 @@
 # Changelog
 
+## [18.0.0] - 2026-11-09
+
+jido_gralkor no longer captures conversations. Its consumer keeps its own chat record and remembers it through `Gralkor.Client.ingest/2` with a Lens, so the capture buffer, flushes, lifecycle flush, and context rotation are removed. Memory search, `memory_add`, Lens ingestion, Reflections, recall, and everything else are unchanged.
+
+### Breaking
+- **The plugin no longer captures turns.** `JidoGralkor.Plugin` handles only `ai.react.query`; it does nothing on `ai.request.completed` or `ai.request.failed`, and no longer requires `agent.state[:user_name]`. It also no longer copies the selected Lens onto the request's thread entry (`extra_refs.jido_gralkor_lens`), which only capture read. **Migrate:** keep your own chat record, render the turns with `Gralkor.Distill.format_transcript/3`, and ingest the transcript with `Gralkor.Client.ingest(agent_server, %Gralkor.Ingest{lens: "personal-chat", source_kind: :conversation, ...})` (or another Lens) when your application decides a conversation should be remembered. You can stop setting `:user_name` in agent state.
+- **`capture_destination` raises.** Mounting `JidoGralkor.Plugin` with `:capture_destination` raises `ArgumentError` saying capture was removed in 18.0.0. **Migrate:** remove the option from the mount; `:agent_name`, `:ingestion_lens`, and `:runtime_config` are unchanged.
+- **`Gralkor.Capture` and `Gralkor.CaptureBuffer` are removed.** The capture buffer is no longer a child of the application supervision tree, which now starts only `Gralkor.Python` and `Gralkor.GraphitiPool`, and application shutdown no longer flushes buffered turns. **Migrate:** remember conversations through `Gralkor.Client.ingest/2` as above; anything you still buffer is yours to flush before shutdown.
+- **The `capture`, `flush`, and `flush_and_await` callbacks are removed** from the `Gralkor.Client` behaviour, from `Gralkor.Client.Native`, and from `Gralkor.Client.InMemory`, together with `Gralkor.Client.capture/2` and the retired positional capture arities. `Gralkor.Client.InMemory` loses `set_capture/1`, `set_flush/1`, `set_flush_and_await/1`, `captures/0`, `flushes/0`, and `flush_and_awaits/0`. **Migrate:** call `Gralkor.Client.ingest/2` instead of capturing and flushing; in tests, assert on the Lens storage (`Gralkor.Lens.Storage.InMemory`) instead of `captures/0`, and delete calls to the removed setters.
+- **`JidoGralkor.Canonical` is removed.** **Migrate:** build `%Gralkor.Message{}` lists from your own chat record; `Gralkor.Distill.format_transcript/3` renders them.
+- **`JidoGralkor.Lifecycle` is removed.** **Migrate:** remove `lifecycle_mod: JidoGralkor.Lifecycle` from `start_agent` calls; there is nothing to flush when an agent stops.
+- **`JidoGralkor.ContextRotator` is removed.** **Migrate:** to start a fresh context, stop the agent and start a new one, or rotate the thread yourself; remember the conversation from your own record first if you need it in memory.
+- **`Gralkor.Application.build_flush_callback/2` and `build_lens_flush_callback/1` are removed.** **Migrate:** none needed outside tests; they existed only for the capture buffer.
+
 ## [17.0.0] - 2026-11-09
 
 Search filters memory by the writer that produced it. Every episode, fact, and entity now records its writers, and a search includes or excludes writers by a constant check on each record, so a filtered search takes about as long as an unfiltered one.

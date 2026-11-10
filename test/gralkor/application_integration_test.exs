@@ -4,7 +4,6 @@ defmodule Gralkor.ApplicationIntegrationTest do
   @moduletag :integration
 
   alias Gralkor.Application, as: App
-  alias Gralkor.Client
 
   describe "when the application starts > while a data directory is configured and no remote connection is configured" do
     setup do
@@ -25,98 +24,8 @@ defmodule Gralkor.ApplicationIntegrationTest do
       :ok
     end
 
-    test "then startup returns only once the Python runtime, graph pool, and capture buffer have initialised" do
+    test "then startup returns only once the Python runtime and graph pool have initialised" do
       assert_startup_returns_after_children_initialise()
-    end
-  end
-
-  # The production path (start/2) builds the flush callback with NO add_episode_fn
-  # dep, so it falls back to the default. Every other build_flush_callback test
-  # injects a stub add_episode_fn and never exercises that default — which is
-  # exactly where a dispatch bug hides: GraphitiPool.add_episode carries defaults
-  # on server (1st) and opts (6th), so a 5-arity capture bound the wrong params and
-  # raised FunctionClauseError on every real capture, exhausting CaptureBuffer and
-  # writing nothing. This wires the real GraphitiPool (fake graphiti recording the
-  # add_episode call) and drives the DEFAULT-wired callback end-to-end.
-  describe "when a capture flush runs > while no episode-writing dependency is supplied" do
-    setup do
-      {g, _} =
-        Pythonx.eval(
-          """
-          import asyncio
-
-          class _FakeGraphiti:
-              def __init__(self):
-                  self.recorded = {}
-
-              async def build_indices_and_constraints(self):
-                  return None
-
-              async def add_episode(self, **kwargs):
-                  self.recorded['episode_body'] = kwargs.get('episode_body')
-                  self.recorded['source_description'] = kwargs.get('source_description')
-                  self.recorded['group_id'] = kwargs.get('group_id')
-                  return None
-
-          _FakeGraphiti()
-          """,
-          %{}
-        )
-
-      start_supervised!(
-        {Gralkor.GraphitiPool,
-         [
-           name: Gralkor.GraphitiPool,
-           table: :gralkor_graphiti_instances,
-           falkordb_spec: {:embedded, "/tmp/never_used"},
-           construct_falkor_db: fn _spec -> :stub_falkor_db end,
-           construct_shared_clients: fn _spec ->
-             %{llm_client: nil, embedder: nil, cross_encoder: nil}
-           end,
-           construct_instance: fn _db, _shared, _group_id -> g end,
-           warmup: false,
-           install_loop_fn: &Gralkor.Python.install_async_runtime/0
-         ]}
-      )
-
-      %{g: g}
-    end
-
-    test "then default writes name the graph pool server explicitly and reach it without shifted arguments",
-         %{g: g} do
-      cb = App.build_flush_callback({:embedded, "/tmp/never_used"})
-
-      turns = [
-        [
-          Gralkor.Message.new("user", "the backup keeps failing"),
-          Gralkor.Message.new("assistant", "I moved the vacuum job to 04:00")
-        ]
-      ]
-
-      assert :ok = cb.("flush_group", "Susu", "Eli", nil, turns)
-
-      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      rec = Pythonx.decode(rec)
-      assert rec["source_description"] == "captured [gralkor: direct]"
-      assert rec["group_id"] == Client.sanitize_group_id("flush_group")
-      assert rec["episode_body"] =~ "vacuum"
-    end
-
-    test "and the logical group is encoded exactly once by that graph pool boundary", %{g: g} do
-      cb = App.build_flush_callback({:embedded, "/tmp/never_used"})
-
-      turns = [
-        [
-          Gralkor.Message.new("user", "the backup keeps failing"),
-          Gralkor.Message.new("assistant", "I moved the vacuum job to 04:00")
-        ]
-      ]
-
-      assert :ok = cb.("operator/one", "Susu", "Eli", nil, turns)
-
-      {rec, _} = Pythonx.eval("g.recorded", %{"g" => g})
-      rec = Pythonx.decode(rec)
-      assert rec["group_id"] == Client.sanitize_group_id("operator/one")
     end
   end
 
@@ -125,7 +34,6 @@ defmodule Gralkor.ApplicationIntegrationTest do
 
     assert_received {:initialised, Gralkor.Python}
     assert_received {:initialised, Gralkor.GraphitiPool}
-    assert :ok = Gralkor.CaptureBuffer.flush_all()
   end
 
   defp start_application_children(test_pid) do
@@ -135,8 +43,7 @@ defmodule Gralkor.ApplicationIntegrationTest do
 
     [
       {Gralkor.Python, python_opts},
-      {Gralkor.GraphitiPool, pool_opts},
-      {Gralkor.CaptureBuffer, buffer_opts}
+      {Gralkor.GraphitiPool, pool_opts}
     ] = App.children()
 
     python_opts = initialising_python_opts(python_opts, test_pid)
@@ -150,8 +57,7 @@ defmodule Gralkor.ApplicationIntegrationTest do
          [
            [
              {Gralkor.Python, python_opts},
-             {Gralkor.GraphitiPool, pool_opts},
-             {Gralkor.CaptureBuffer, buffer_opts}
+             {Gralkor.GraphitiPool, pool_opts}
            ],
            [strategy: :one_for_one]
          ]}

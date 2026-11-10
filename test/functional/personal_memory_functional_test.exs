@@ -82,31 +82,24 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
        }}
     )
 
-    start_supervised!(
-      {Gralkor.CaptureBuffer,
-       flush_callback: Gralkor.Application.build_flush_callback(nil),
-       lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
-       retries: []}
-    )
-
     %{graphiti: graphiti}
   end
 
-  describe "when an application captures directly to the registered personal Destination without selecting a Lens" do
+  describe "when an application adds memory directly to an operator's personal graph without selecting a Lens" do
     test "then the graph named `personal/<operator id>` receives the conversation", context do
-      capture({:direct, "personal"})
+      remember({:direct, "personal"})
       assert [record] = recorded(context.graphiti)
       assert record["group_id"] == Client.sanitize_group_id("personal/owner")
     end
 
     test "and jido_gralkor's built-in ontology governs extraction", context do
-      capture({:direct, "personal"})
+      remember({:direct, "personal"})
       assert [record] = recorded(context.graphiti)
       assert record["has_entity_types"] == false
     end
 
     test "and public search returns the conversation without Lens or Reflection authorship" do
-      capture({:direct, "personal"})
+      remember({:direct, "personal"})
       assert {:ok, [%{destination: "personal", episodes: [episode]}]} = search()
       assert episode.content == "Eli: Remember teal"
       assert episode.source_kind == "conversation"
@@ -116,7 +109,7 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
     end
 
     test "and no packaged Lens ingestion process runs", context do
-      capture({:direct, "personal"})
+      remember({:direct, "personal"})
 
       assert [%{"source_description" => "captured [gralkor: direct]"}] =
                recorded(context.graphiti)
@@ -126,7 +119,7 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
   describe "when an application selects the packaged personal-chat Lens" do
     test "then its Store ingestion process writes to that operator's personal Destination",
          context do
-      capture({:lenses, ["personal-chat"]})
+      remember({:lenses, ["personal-chat"]})
       assert [%{"group_id" => group}] = recorded(context.graphiti)
       assert group == Client.sanitize_group_id("personal/owner")
     end
@@ -160,29 +153,29 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
     end
 
     test "and its stored episode identifies personal-chat as the originating Lens" do
-      capture({:lenses, ["personal-chat"]})
+      remember({:lenses, ["personal-chat"]})
       assert {:ok, [%{destination: "personal", episodes: [%{lens: "personal-chat"}]}]} = search()
     end
 
-    test "and no additional direct capture write occurs", context do
-      capture({:lenses, ["personal-chat"]})
+    test "and no additional direct write occurs", context do
+      remember({:lenses, ["personal-chat"]})
 
       assert [%{"source_description" => "captured [lens: personal-chat]"}] =
                recorded(context.graphiti)
     end
   end
 
-  describe "when direct capture and a genuine consumer Lens target personal memory for the same operator" do
+  describe "when direct memory addition and a genuine consumer Lens target personal memory for the same operator" do
     test "then both routes use the same personal graph", context do
-      capture({:direct, "personal"})
-      capture({:lenses, ["notes"]})
+      remember({:direct, "personal"})
+      remember({:lenses, ["notes"]})
       assert [first, second] = recorded(context.graphiti)
       assert first["group_id"] == second["group_id"]
     end
 
     test "and each write retains its actual originating route" do
-      capture({:direct, "personal"})
-      capture({:lenses, ["notes"]})
+      remember({:direct, "personal"})
+      remember({:lenses, ["notes"]})
 
       assert {:ok, [%{destination: "personal", episodes: [%{writer: :direct}, %{lens: "notes"}]}]} =
                search()
@@ -190,10 +183,16 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
   end
 
   describe "if an application selects the retired operator Lens or Destination" do
-    test "then the request fails with an explicit migration error before capture or graph access",
+    test "then the request fails with an explicit migration error before graph access",
          context do
-      for route <- [{:direct, "operator"}, {:lenses, ["operator"]}] do
-        assert_raise ArgumentError, ~r/retired/, fn -> capture(route) end
+      assert_raise ArgumentError, ~r/retired/, fn -> remember({:lenses, ["operator"]}) end
+
+      assert_raise ArgumentError, ~r/retired/, fn ->
+        Client.search(self(), %Search{
+          operator_id: "owner",
+          query: "teal",
+          destinations: ["operator"]
+        })
       end
 
       assert recorded(context.graphiti) == []
@@ -203,7 +202,7 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
   describe "if an application retains the removed deployment-wide `:jido_gralkor, :ontology` setting" do
     @tag retained_deployment_ontology: Gralkor.TestOntologies.Strict
     test "then personal-chat still uses jido_gralkor's built-in ontology", context do
-      capture({:lenses, ["personal-chat"]})
+      remember({:lenses, ["personal-chat"]})
 
       assert [record] = recorded(context.graphiti)
       assert record["source_description"] == "captured [lens: personal-chat]"
@@ -212,18 +211,26 @@ defmodule Gralkor.PersonalMemoryFunctionalTest do
     end
   end
 
-  defp capture(route) do
+  defp remember({:direct, "personal"}) do
     assert :ok =
-             Client.capture(self(), %Gralkor.Capture{
-               session_id: "personal-session",
-               operator_id: "owner",
-               agent_name: "Susu",
-               user_name: "Eli",
-               messages: [Gralkor.Message.new("user", "Remember teal")],
-               route: route
-             })
+             Client.impl().memory_add(
+               Client.personal_graph_id("owner"),
+               "Eli: Remember teal",
+               "captured",
+               :conversation
+             )
+  end
 
-    Client.impl().flush_and_await("personal-session", 5_000)
+  defp remember({:lenses, [lens]}) do
+    assert :ok =
+             Client.ingest(self(), %Gralkor.Ingest{
+               id: "personal-#{lens}",
+               operator_id: "owner",
+               lens: lens,
+               source_kind: :conversation,
+               content: "Eli: Remember teal",
+               source_description: "captured"
+             })
   end
 
   defp search,

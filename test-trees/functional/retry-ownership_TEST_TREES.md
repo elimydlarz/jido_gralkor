@@ -1,16 +1,6 @@
-Functional: retry-ownership (src: lib/gralkor/capture_buffer.ex, lib/gralkor/client.ex, lib/gralkor/destination/storage.ex, lib/gralkor/reflection/runner.ex, lib/jido_gralkor/runtime.ex, lib/gralkor/recall.ex, lib/gralkor/client/native.ex, lib/gralkor/graphiti_pool.ex, lib/gralkor/application.ex; functional: test/functional/retry_ownership_functional_test.exs)
+Functional: retry-ownership (src: lib/gralkor/client.ex, lib/gralkor/destination/storage.ex, lib/gralkor/reflection/runner.ex, lib/jido_gralkor/runtime.ex, lib/gralkor/recall.ex, lib/gralkor/client/native.ex, lib/gralkor/graphiti_pool.ex, lib/gralkor/application.ex; functional: test/functional/retry_ownership_functional_test.exs)
 
-when a capture callback returns an upstream rate-limit failure
-  then the capture buffer does not retry the returned failure and logs it
-
-when a capture callback returns another upstream failure
-  then the capture buffer does not retry it and returns it unchanged
-
-when a graph write raises inside a capture chain
-  then the capture buffer retries with its default one-second and two-second backoffs
-  and a returned write failure is not retried by a second layer
-
-when a graph write fails outside a capture chain
+when a direct graph write fails
   then the direct caller receives the failure after one attempt
 
 when Reflection production, packaged generalisation related-memory retrieval, or Destination delivery reports a retryable server failure

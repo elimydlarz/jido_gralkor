@@ -330,37 +330,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
-  describe "when captured conversation turns are ingested automatically" do
-    test "then Gralkor supplies conversation as their source kind" do
-      graphiti = use_native_boundary()
-      use_capture_runtime()
-
-      capture_turn("lens-capture", {:lenses, ["observations"]})
-      capture_turn("direct-capture", {:direct, "personal"})
-
-      assert [
-               %{"source" => "message", "source_description" => "captured [lens: observations]"},
-               %{"source" => "message", "source_description" => "captured [gralkor: direct]"}
-             ] = added_episodes(graphiti)
-    end
-
-    test "and their rendered speaker-attributed transcript is submitted as a conversational-message episode" do
-      graphiti = use_native_boundary()
-      use_capture_runtime()
-
-      capture_turn("lens-capture", {:lenses, ["observations"]})
-      capture_turn("direct-capture", {:direct, "personal"})
-
-      transcript = "Mina: Atlas might launch Friday.\nGralkor: I will remember that."
-
-      assert [
-               %{"body" => ^transcript, "source" => "message"},
-               %{"body" => ^transcript, "source" => "message", "writer" => "direct"}
-             ] = added_episodes(graphiti)
-    end
-  end
-
-  describe "when information is added or captured directly without a selected Lens" do
+  describe "when information is added directly without a selected Lens" do
     test "then its source kind and description remain unchanged without Lens or Reflection authorship" do
       graphiti = use_native_boundary()
 
@@ -531,7 +501,7 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     end
   end
 
-  describe "when information is added or captured directly without a selected Lens > where a direct addition omits its source kind" do
+  describe "when information is added directly without a selected Lens > where a direct addition omits its source kind" do
     test "then the episode is stored as a document" do
       graphiti = use_native_boundary()
 
@@ -1054,55 +1024,6 @@ defmodule Gralkor.IngestedInformationProvenanceFunctionalTest do
     Application.put_env(:jido_gralkor, :lenses, [
       [name: "observations", destination: "observations", ingestion: RecordingIngestion]
     ])
-  end
-
-  defp use_capture_runtime do
-    previous_client = Application.get_env(:jido_gralkor, :client)
-    Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
-    on_exit(fn -> restore_env(:client, previous_client) end)
-
-    start_supervised!(
-      {JidoGralkor.Runtime,
-       owner: self(),
-       configuration: %{
-         destinations: [%{name: "observations"}],
-         lenses: [
-           %{
-             name: "observations",
-             destination: "observations",
-             ingestion: Gralkor.Lens.Ingestion.Store
-           }
-         ],
-         reflections: []
-       }}
-    )
-
-    start_supervised!(
-      {Gralkor.CaptureBuffer,
-       flush_callback: Gralkor.Application.build_flush_callback(nil),
-       lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
-       lens_resolver: fn runtime_owner, names ->
-         {:ok, JidoGralkor.Runtime.lenses!(runtime_owner, names)}
-       end,
-       retries: []}
-    )
-  end
-
-  defp capture_turn(session_id, route) do
-    assert :ok =
-             Client.capture(self(), %Gralkor.Capture{
-               session_id: session_id,
-               operator_id: "operator-one",
-               agent_name: "Gralkor",
-               user_name: "Mina",
-               messages: [
-                 Gralkor.Message.new("user", "Atlas might launch Friday."),
-                 Gralkor.Message.new("assistant", "I will remember that.")
-               ],
-               route: route
-             })
-
-    assert :ok = Client.impl().flush_and_await(session_id, 5_000)
   end
 
   defp inference_requests(graphiti) do

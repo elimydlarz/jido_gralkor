@@ -14,7 +14,6 @@ defmodule Gralkor.GeneralisationReflectionFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Generalisation Reflection Consumer",
-           capture_destination: "personal",
            runtime_config: %{
              destinations: [
                %{name: "observations-memory"},

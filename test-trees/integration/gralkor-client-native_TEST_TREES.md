@@ -18,70 +18,6 @@ if a recall is requested with a missing or blank agent name
   then an argument error naming the agent name is raised
   and no search is issued
 
-when typed direct capture names its session, Destination, operator, agent, and user
-  then the logical group is buffered unchanged so the physical Graphiti boundary can encode it exactly once
-  and jido_gralkor's built-in ontology is selected, the caller being given no ontology argument of its own
-  and that built-in ontology is buffered alongside the turn
-  and the buffer receives the session, logical group, names, ontology and messages
-  and success is returned immediately, no distillation running before the call returns
-  and nothing is logged for the turn itself, captured content becoming observable only at flush
-
-where a turn is captured through a named Lens
-  then the operator id is buffered unchanged, so the Lens keeps the operator's original identity
-  and the agent name, the user name, the Lens name and the messages are appended to the capture buffer under that session
-  and the built-in ontology is not selected, a named Lens owning its own ontology
-  and success is returned immediately
-
-where typed capture selects multiple named Lenses
-  then each named Lens receives that turn in its own flush batch
-  but the session buffers the turn only once
-
-if named-Lens capture is requested with a missing or blank operator identifier
-  then an argument error naming the operator identifier is raised
-  and no turn is buffered
-
-if a capture is requested with a missing or blank session id
-  then an argument error naming the session id is raised
-  and no turn is buffered
-
-if a capture is requested with a missing or blank agent name
-  then an argument error naming the agent name is raised
-  and no turn is buffered
-
-if a capture is requested with a missing or blank user name
-  then an argument error naming the user name is raised
-  and no turn is buffered
-
-when a session holding buffered turns is flushed
-  then those turns are scheduled for flush
-  and success is returned before that flush completes
-
-when a session holding no buffered turns is flushed
-  then success is returned
-  and no flush work is scheduled
-
-if a flush is requested with a missing or blank session id
-  then an argument error naming the session id is raised
-
-when buffered turns are flushed and awaited with a positive timeout
-  while the flush completes inside the timeout
-    then success is returned
-    and immediate recall for the bound group surfaces the flushed turns
-  while the flush does not complete inside the timeout
-    then a timeout error is returned
-    and the buffered turns remain available to flush on a later call
-  if the backend fails before the timeout elapses
-    then that failure is returned unchanged
-
-when a session holding no buffered turns is flushed and awaited
-  then success is returned
-
-if a flush-and-await is requested with a missing or blank session id
-  then an argument error naming the session id is raised
-
-if a flush-and-await is requested with a missing or non-positive timeout
-  then an argument error naming the timeout is raised
-
 when memory is added with a group and content
   then the logical group reaches the physical Graphiti boundary unchanged and is encoded exactly once there
   and the content is written to the graph as a plain-text episode scoped to that physical group
@@ -129,7 +65,4 @@ when a recall runs
     and the work already handed to the embedded interpreter finishes unobserved, no layer being able to cancel it
 
 where any adapter operation other than recall runs
-  then it carries no deadline of its own, so a memory addition, a capture flush, an index rebuild and a community build each run for as long as the graph takes
-
-if an obsolete positional capture arity is called
-  then the adapter raises an explicit typed-request migration error
+  then it carries no deadline of its own, so a memory addition, an index rebuild and a community build each run for as long as the graph takes

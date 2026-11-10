@@ -23,23 +23,14 @@ defmodule Gralkor.Client do
   unmarked and operator-labelled records remain readable without an active
   operator Lens.
 
-  Capture uses `capture/2` with an owning AgentServer PID and an explicit
-  `Gralkor.Capture` route. Direct capture selects a registered Destination;
-  Lens capture runs distinct selected processes without an implicit direct
-  write. Positional capture adapters raise migration guidance. The low-level
-  adapter ports retain `recall/4`, `memory_add/3` or `/4`, and flush operations.
+  The low-level adapter ports are `recall/4`, `memory_add/3` or `/4`,
+  `build_indices/0`, and `build_communities/1`.
   Logical graph IDs are encoded exactly once as `g_` plus the lowercase
   hexadecimal encoding of every original byte (`sanitize_group_id/1`).
   The `personal` Destination resolves to `personal/<operator id>`; other
   registered Destinations resolve to their exact shared names. Retired
   `operator` inputs require an explicit migration and never become shared
   private-memory graphs.
-
-  `flush/1` returns `:ok` before the buffered turns have landed
-  (fire-and-forget — appropriate for shutdown paths that cannot block).
-  `flush_and_await/2` returns `:ok` only after buffered ingestion completes,
-  for callers that must observe completion before rotating state (for example
-  session-id rotation in `JidoGralkor.ContextRotator`).
 
   The concrete adapter is resolved from `Application.get_env(:jido_gralkor, :client)`;
   defaults to `Gralkor.Client.Native` (in-process via Pythonx). Tests swap in
@@ -69,7 +60,6 @@ defmodule Gralkor.Client do
 
   @callback recall(group_id(), agent_name(), session_id() | nil, query :: String.t()) ::
               {:ok, String.t()} | {:error, term()}
-  @callback capture(runtime_owner(), Gralkor.Capture.t()) :: :ok | {:error, term()}
   @callback memory_add(
               group_id(),
               content :: String.t(),
@@ -83,9 +73,6 @@ defmodule Gralkor.Client do
               source_kind :: Ingest.source_kind()
             ) ::
               :ok | {:error, term()}
-  @callback flush(session_id()) :: :ok | {:error, term()}
-  @callback flush_and_await(session_id(), timeout_ms :: pos_integer()) ::
-              :ok | {:error, :timeout} | {:error, term()}
   @callback build_indices() :: {:ok, %{status: String.t()}} | {:error, term()}
   @callback build_communities(group_id()) ::
               {:ok, %{communities: non_neg_integer(), edges: non_neg_integer()}}
@@ -119,19 +106,6 @@ defmodule Gralkor.Client do
           {:ok, String.t()} | {:error, term()}
   def reflect(runtime_owner, reflection_name, invocation, callback, opts \\ []) do
     Runtime.submit_reflection(runtime_owner, reflection_name, invocation, callback, opts)
-  end
-
-  @spec capture(runtime_owner(), Gralkor.Capture.t()) :: :ok | {:error, term()}
-  def capture(runtime_owner, %Gralkor.Capture{} = request) do
-    Runtime.ensure_available!(runtime_owner)
-    Gralkor.Capture.validate!(request)
-    impl().capture(runtime_owner, request)
-  end
-
-  @doc false
-  def capture(_owner, _session, _operator, _agent, _user, _messages, _lens, _additional) do
-    raise ArgumentError,
-          "positional capture was retired; use Client.capture(runtime_owner, %Gralkor.Capture{})"
   end
 
   @doc false
@@ -413,7 +387,7 @@ defmodule Gralkor.Client do
     case Enum.find(lenses, fn definition -> Keyword.get(definition, :name) == name end) do
       nil when name in ["operator", "default"] ->
         raise ArgumentError,
-              "Lens #{inspect(name)} was retired; use \"personal-chat\" or explicit direct capture"
+              "Lens #{inspect(name)} was retired; use \"personal-chat\" or direct memory_add"
 
       nil ->
         raise ArgumentError, "unknown Lens #{inspect(name)}"

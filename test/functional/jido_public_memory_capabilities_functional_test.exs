@@ -4,16 +4,11 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
   alias Gralkor.Client
   alias JidoGralkor.MemorySearchPresentation, as: Presentation
   alias Gralkor.Client.InMemory
-  alias Gralkor.Client.Native
-  alias Gralkor.CaptureBuffer
   alias Gralkor.Ingest
-  alias Gralkor.Message
   alias JidoGralkor.Actions.MemoryAdd
   alias JidoGralkor.Actions.MemoryBuildCommunities
   alias JidoGralkor.Actions.MemoryBuildIndices
   alias JidoGralkor.Actions.MemorySearch
-  alias JidoGralkor.LifecycleTestAgent
-  alias JidoGralkor.LifecycleTestJido
   alias JidoGralkor.Plugin
   alias JidoGralkor.ReAct
 
@@ -139,7 +134,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Deterministic Memory Agent",
-           capture_destination: "personal",
            runtime_config: %{
              destinations: [],
              lenses: [
@@ -157,28 +151,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       max_iterations: 2,
       system_prompt:
         "Search memory before answering and apply the retrieved evolved generalisation."
-
-    def on_before_cmd(agent, action) do
-      super(%{agent | state: Map.put(agent.state, :user_name, "Eli")}, action)
-    end
-  end
-
-  defmodule CompletionMemoryAgent do
-    use Jido.AI.Agent,
-      name: "completion_memory_agent",
-      model: "openai:gpt-4o-mini",
-      streaming: false,
-      default_plugins: %{__memory__: false},
-      plugins: [
-        {JidoGralkor.Plugin,
-         %{
-           agent_name: "Susu",
-           capture_destination: "personal",
-           runtime_config: %{destinations: [], lenses: [], reflections: []}
-         }}
-      ],
-      tools: [JidoGralkor.Actions.MemorySearch],
-      max_iterations: 1
   end
 
   defmodule TransportMemoryAgent do
@@ -208,29 +180,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     start_supervised!(Gralkor.Lens.Storage.InMemory)
     start_supervised!(Gralkor.Destination.Storage.InMemory)
-
-    flush_test_pid = self()
-
-    add_episode_fn = fn group_id, body, source, ontology, opts ->
-      send(
-        flush_test_pid,
-        {:external_write_started, self(), group_id, body, source, ontology, opts}
-      )
-
-      receive do
-        :release ->
-          send(flush_test_pid, {:external_write_finished, group_id})
-          :ok
-      after
-        5_000 -> :ok
-      end
-    end
-
-    start_supervised!(
-      {CaptureBuffer,
-       flush_callback:
-         Gralkor.Application.build_flush_callback(nil, add_episode_fn: add_episode_fn)}
-    )
 
     Application.put_env(:jido_gralkor, :destinations, [
       [name: "observations"],
@@ -284,41 +233,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end)
 
     :ok
-  end
-
-  describe "when an application gracefully stops an agent with a committed thread" do
-    test "then termination returns without waiting for the memory flush" do
-      Application.put_env(:jido_gralkor, :client, Native)
-
-      assert :ok =
-               Gralkor.Client.capture(self(), %Gralkor.Capture{
-                 session_id: "committed-thread",
-                 operator_id: "operator-one",
-                 agent_name: "Lifecycle Agent",
-                 user_name: "Eli",
-                 messages: [Message.new("user", "flush this")],
-                 route: {:direct, "personal"}
-               })
-
-      pid = start_agent_with_thread("committed-thread")
-      stop = Task.async(fn -> GenServer.stop(pid, :shutdown, 5_000) end)
-
-      assert_receive {:external_write_started, worker, "personal/operator-one", body, "captured",
-                      Gralkor.DefaultOntology, opts}
-
-      assert body == "Eli: flush this"
-      assert opts[:source_kind] == :conversation
-      refute_receive {:external_write_finished, "personal/operator-one"}
-      assert {:ok, :ok} = Task.yield(stop, 100)
-      send(worker, :release)
-      assert_receive {:external_write_finished, "personal/operator-one"}
-    end
-
-    test "and the configured memory client flushes the committed thread" do
-      pid = start_agent_with_thread("committed-thread")
-      assert :ok = GenServer.stop(pid, :shutdown, 5_000)
-      assert eventually(fn -> InMemory.flushes() == [["committed-thread"]] end)
-    end
   end
 
   describe "when an operator runs the build-indices memory action" do
@@ -527,7 +441,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
       assert {:ok, plugin_state} =
                Plugin.mount(%{},
                  agent_name: "Susu",
-                 capture_destination: "personal",
                  runtime_config: setup_runtime_configuration()
                )
 
@@ -619,37 +532,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
       assert result =~ "NON-RESULT"
       assert result =~ "no query was provided"
-    end
-  end
-
-  describe "when a mounted plugin completes a memory-worthy turn with a committed thread > if agent state has no non-blank user name" do
-    test "then completion raises an ArgumentError naming the missing user name" do
-      {agent, signal, log} = complete_mounted_turn(%{}, :ok)
-
-      assert log =~ ~r/JidoGralkor.Plugin handle_signal crashed: .*user_name/
-
-      assert_raise ArgumentError, ~r/user_name/, fn ->
-        Plugin.handle_signal(signal, %{agent: agent})
-      end
-
-      assert InMemory.captures() == []
-    end
-  end
-
-  describe "when a mounted plugin completes a memory-worthy turn with a committed thread > if capture fails" do
-    test "then completion raises reporting the capture failure" do
-      {agent, signal, log} =
-        complete_mounted_turn(%{user_name: "Eli"}, {:error, :unavailable})
-
-      assert log =~ ~r/JidoGralkor.Plugin handle_signal crashed: .*capture failed.*unavailable/
-
-      assert_raise RuntimeError, ~r/capture failed.*unavailable/, fn ->
-        Plugin.handle_signal(signal, %{
-          agent: agent,
-          jido_instance: Jido.default_instance(),
-          partition: nil
-        })
-      end
     end
   end
 
@@ -1058,35 +940,6 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     end
   end
 
-  defp start_agent_with_thread(thread_id) do
-    InMemory.set_flush(:ok)
-    {:ok, jido} = Jido.start(name: LifecycleTestJido, otp_app: :jido_gralkor)
-
-    on_exit(fn ->
-      if Process.alive?(jido) do
-        try do
-          GenServer.stop(jido, :normal, 5_000)
-        catch
-          :exit, _reason -> :ok
-        end
-      end
-    end)
-
-    {:ok, pid} =
-      Jido.start_agent(
-        LifecycleTestJido,
-        LifecycleTestAgent,
-        id: "agent-#{System.unique_integer([:positive])}",
-        lifecycle_mod: JidoGralkor.Lifecycle
-      )
-
-    :sys.replace_state(pid, fn state ->
-      put_in(state.agent.state[:__thread__], %{id: thread_id})
-    end)
-
-    pid
-  end
-
   defp memory_search_text(params, context_options) do
     with {:ok, %{sections: sections}} <- memory_search(params, context_options),
          do: {:ok, %{result: Presentation.text(sections)}}
@@ -1172,52 +1025,9 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
     artefact
   end
 
-  defp complete_mounted_turn(extra_state, capture_result) do
-    request_id = "functional-completion"
-    InMemory.set_capture(capture_result)
-    jido = Jido.default_instance()
-    start_supervised!({Jido, name: jido, otp_app: :jido_gralkor})
-
-    assert {:ok, pid} =
-             Jido.start_agent(jido, CompletionMemoryAgent, id: "operator-one")
-
-    :sys.replace_state(pid, fn server_state ->
-      update_in(server_state.agent.state, fn agent_state ->
-        agent_state
-        |> Map.delete(:user_name)
-        |> Map.put(:__thread__, %{id: "thread-one"})
-        |> Map.update(:__strategy__, %{}, fn strategy ->
-          Map.put(strategy, :request_traces, %{
-            request_id => %{events: [%{kind: :llm_completed, data: %{}}]}
-          })
-        end)
-        |> Map.put(:requests, %{request_id => %{query: "remember this"}})
-        |> Map.merge(extra_state)
-      end)
-    end)
-
-    signal =
-      Jido.Signal.new!(
-        "ai.request.completed",
-        %{request_id: request_id, result: "remembered"},
-        source: "/functional"
-      )
-
-    log =
-      ExUnit.CaptureLog.capture_log(fn ->
-        assert :ok = Jido.AgentServer.cast(pid, signal)
-        assert {:ok, _state} = Jido.AgentServer.state(pid)
-      end)
-
-    assert {:ok, %{agent: agent}} = Jido.AgentServer.state(pid)
-    {agent, signal, log}
-  end
-
   defp evolved_generalisation_provider_tool_text do
     operator_id = "functional-agent-#{System.unique_integer([:positive])}"
     jido = Jido.default_instance()
-
-    InMemory.set_capture(:ok)
 
     start_supervised!({Jido, name: jido, otp_app: :jido_gralkor})
 

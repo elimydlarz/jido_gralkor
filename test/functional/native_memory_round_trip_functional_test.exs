@@ -1,10 +1,10 @@
 defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   @moduledoc """
-  The native adapter's write, capture, flush and recall path at its public
-  seam, with the graph replaced by a recording substitute.
+  The native adapter's write and recall path at its public seam, with the
+  graph replaced by a recording substitute.
 
-  Every internal component is real — `Gralkor.Client.Native`, the capture
-  buffer, the flush callback the application builds, the recall pipeline. Only
+  Every internal component is real — `Gralkor.Client.Native` and the recall
+  pipeline. Only
   the two things outside the system boundary are substituted: the graph, by a
   fake that records what it was asked to write and returns what the test tells
   it to.
@@ -14,17 +14,12 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
   use ExUnit.Case, async: false
 
-  alias Gralkor.Application, as: App
-  alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Client.Native
   alias Gralkor.GraphitiPool
-  alias Gralkor.Message
 
   @moduletag :functional
   @moduletag timeout: 120_000
-
-  @captured_source "captured [gralkor: direct]"
 
   setup do
     test_pid = self()
@@ -123,13 +118,6 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
        ]}
     )
 
-    start_supervised!(
-      {JidoGralkor.Runtime,
-       owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}}
-    )
-
-    start_supervised!({CaptureBuffer, [flush_callback: App.build_flush_callback(nil)]})
-
     %{g: g}
   end
 
@@ -148,24 +136,6 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
   defp search_count(g) do
     {count, _} = Pythonx.eval("g.searches", %{"g" => g})
     Pythonx.decode(count)
-  end
-
-  defp delay_add(g, seconds),
-    do: Pythonx.eval("g.add_delay = seconds", %{"g" => g, "seconds" => seconds})
-
-  defp await_episode(g, source, budget_ms \\ 10_000)
-
-  defp await_episode(_g, _source, budget_ms) when budget_ms <= 0, do: nil
-
-  defp await_episode(g, source, budget_ms) do
-    case Enum.find(episodes(g), &(&1["source_description"] == source)) do
-      nil ->
-        Process.sleep(100)
-        await_episode(g, source, budget_ms - 100)
-
-      episode ->
-        episode
-    end
   end
 
   describe "when a fact is written into an operator's memory" do
@@ -260,41 +230,6 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
     end
   end
 
-  describe "when a captured turn is flushed for its session" do
-    test "then flush returns before graph ingestion completes", %{g: g} do
-      delay_add(g, 0.5)
-      capture("session-immediate")
-
-      started_at = System.monotonic_time(:millisecond)
-      assert :ok = Native.flush("session-immediate")
-      assert System.monotonic_time(:millisecond) - started_at < 250
-      assert episodes(g) == []
-      assert await_episode(g, @captured_source)
-    end
-
-    test "and the rendered transcript eventually reaches the selected personal graph with direct conversation provenance",
-         %{g: g} do
-      capture("session-transcript")
-      assert :ok = Native.flush("session-transcript")
-      episode = await_episode(g, @captured_source)
-      assert episode, "expected a captured episode to reach the graph"
-      assert episode["group_id"] == Client.sanitize_group_id("personal/operator-one")
-      assert episode["body"] =~ "teal"
-      assert episode["writer"] == "direct"
-      assert episode["source"] == "message"
-    end
-
-    test "and a second flush writes no duplicate transcript", %{g: g} do
-      capture("session-consumed")
-      assert :ok = Native.flush("session-consumed")
-      assert await_episode(g, @captured_source)
-      assert :ok = Native.flush("session-consumed")
-      Process.sleep(200)
-
-      assert Enum.count(episodes(g), &(&1["source_description"] == @captured_source)) == 1
-    end
-  end
-
   describe "where the deployment configures a recall deadline > if recall outlasts that deadline" do
     test "then recall returns the expired deadline without a memory block", %{g: g} do
       put_facts(g, ["Eli works at Anthropic."])
@@ -333,22 +268,5 @@ defmodule Gralkor.NativeMemoryRoundTripFunctionalTest do
 
       assert reason =~ "graph refused the search"
     end
-  end
-
-  defp capture(session_id) do
-    Client.capture(
-      self(),
-      struct!(Gralkor.Capture,
-        session_id: session_id,
-        operator_id: "operator-one",
-        agent_name: "Susu",
-        user_name: "Eli",
-        route: {:direct, "personal"},
-        messages: [
-          Message.new("user", "my favourite colour is teal"),
-          Message.new("assistant", "Noted — teal it is.")
-        ]
-      )
-    )
   end
 end

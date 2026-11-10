@@ -16,7 +16,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Reflection Async Consumer",
-           capture_destination: "personal",
            runtime_config: %{destinations: [], lenses: [], reflections: []}
          }}
       ]

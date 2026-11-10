@@ -55,13 +55,13 @@ when a caller searches memory
 when a search names a writer
   then `lens:<name>` names the Lens of that name
   and `reflection:<name>` names the Reflection of that name, whose output is stored in memory
-  and `direct` names direct capture and direct memory addition
+  and `direct` names direct memory addition and conversations captured before 18.0.0
   and `unknown` names memory whose writer could not be determined
   and `lens:*` names every Lens
   and `reflection:*` names every Reflection
 
 when memory is written to a Destination
-  then each episode is written by exactly one writer: the Lens it was ingested through, the Reflection whose output it stores, or direct capture or addition
+  then each episode is written by exactly one writer: the Lens it was ingested through, the Reflection whose output it stores, or direct addition
   and each fact is produced by the writer of every episode it was drawn from
   and each entity is produced by the writer of every episode that mentions it
 

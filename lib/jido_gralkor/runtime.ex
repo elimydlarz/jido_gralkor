@@ -701,7 +701,7 @@ defmodule JidoGralkor.Runtime do
 
   defp reject_retired_selection!(:lenses, name) when name in ["operator", "default"] do
     raise ArgumentError,
-          "Lens #{inspect(name)} was retired; select \"personal-chat\" or explicit direct capture"
+          "Lens #{inspect(name)} was retired; select \"personal-chat\" or direct memory_add"
   end
 
   defp reject_retired_selection!(_collection, _name), do: :ok

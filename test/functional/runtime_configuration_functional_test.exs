@@ -11,7 +11,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Runtime Configuration Consumer",
-           capture_destination: "personal",
            runtime_config: %{
              destinations: [],
              lenses: [],
@@ -29,7 +28,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Invalid Runtime Configuration Consumer",
-           capture_destination: "personal",
            runtime_config: %{
              destinations: :not_a_list,
              lenses: [],
@@ -47,7 +45,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Custom Lens Runtime Configuration Consumer",
-           capture_destination: "personal",
            ingestion_lens: "runtime-observations",
            runtime_config: %{
              destinations: [%{name: "runtime-memory"}],
@@ -72,7 +69,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Durable Runtime Configuration Consumer",
-           capture_destination: "personal",
            runtime_config: %{
              destinations: [%{name: "durable-memory"}],
              lenses: [],
@@ -1074,27 +1070,21 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
     end
 
     test "and it never falls back to application compatibility configuration" do
-      Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
-      Gralkor.Client.InMemory.reset()
-      Gralkor.Client.InMemory.set_capture(:ok)
-
       {dead_owner, monitor} = spawn_monitor(fn -> :ok end)
       assert_receive {:DOWN, ^monitor, :process, ^dead_owner, :normal}
 
       assert_raise ArgumentError, ~r/Gralkor runtime unavailable/, fn ->
-        capture(
-          dead_owner,
-          "runtime-unavailable-capture",
-          "operator-one",
-          "Runtime Configuration Consumer",
-          "Eli",
-          [Gralkor.Message.new("user", "must not cross configuration boundaries")],
-          "personal-chat",
-          []
-        )
+        Gralkor.Client.ingest(dead_owner, %Gralkor.Ingest{
+          id: "runtime-unavailable-ingestion",
+          operator_id: "operator-one",
+          lens: "personal-chat",
+          source_kind: :conversation,
+          content: "Eli: must not cross configuration boundaries",
+          source_description: "chat"
+        })
       end
 
-      assert Gralkor.Client.InMemory.captures() == []
+      refute_receive {:runtime_ingestion, _destination}
     end
   end
 
@@ -1103,114 +1093,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert_raise ArgumentError, ~r/runtime target must be an owning AgentServer PID/, fn ->
         JidoGralkor.Runtime.snapshot(:registered_agent_name)
       end
-    end
-  end
-
-  describe "when a selected-Lens turn is buffered for capture" do
-    test "then capture acceptance resolves the Lens through the targeted agent's current runtime-configuration snapshot" do
-      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
-
-      start_supervised!(
-        {Gralkor.CaptureBuffer,
-         flush_callback: fn _, _, _, _, _ -> :ok end,
-         lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
-         retries: []}
-      )
-
-      agent_server =
-        start_supervised!(
-          {Jido.AgentServer,
-           agent: CustomLensConsumerAgent,
-           id: "runtime-configuration-captured-ingestion",
-           register_global: false}
-        )
-
-      assert :ok =
-               capture(
-                 agent_server,
-                 "runtime-capture-session",
-                 "operator-one",
-                 "Runtime Configuration Consumer",
-                 "Eli",
-                 [Gralkor.Message.new("user", "Remember this runtime-configured fact.")],
-                 "runtime-observations",
-                 []
-               )
-
-      assert :ok = Gralkor.Client.Native.flush_and_await("runtime-capture-session", 1_000)
-      assert_receive {:runtime_ingestion, "runtime-memory"}
-    end
-
-    test "and its eventual ingestion retains that resolved Lens after the targeted agent terminates" do
-      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
-      test_pid = self()
-      runtime_callback = Gralkor.Application.build_lens_flush_callback()
-
-      lens_flush_callback = fn operator_id,
-                               agent_name,
-                               user_name,
-                               lens,
-                               turns,
-                               ingestion_id,
-                               runtime_owner ->
-        send(test_pid, {:lens_flush_worker_ready, self()})
-
-        receive do
-          :continue_lens_flush ->
-            runtime_callback.(
-              operator_id,
-              agent_name,
-              user_name,
-              lens,
-              turns,
-              ingestion_id,
-              runtime_owner
-            )
-        end
-      end
-
-      start_supervised!(
-        {Gralkor.CaptureBuffer,
-         flush_callback: fn _, _, _, _, _ -> :ok end,
-         lens_flush_callback: lens_flush_callback,
-         lens_resolver: fn runtime_owner, names ->
-           {:ok, JidoGralkor.Runtime.lenses!(runtime_owner, names)}
-         end,
-         retries: []}
-      )
-
-      agent_server =
-        start_supervised!(
-          {Jido.AgentServer,
-           agent: CustomLensConsumerAgent,
-           id: "runtime-configuration-captured-after-agent-stop",
-           register_global: false}
-        )
-
-      assert :ok =
-               capture(
-                 agent_server,
-                 "runtime-capture-after-stop",
-                 "operator-one",
-                 "Runtime Configuration Consumer",
-                 "Eli",
-                 [Gralkor.Message.new("user", "Retain the resolved Lens.")],
-                 "runtime-observations",
-                 []
-               )
-
-      assert :ok = Gralkor.Client.Native.flush("runtime-capture-after-stop")
-      assert_receive {:lens_flush_worker_ready, worker}
-
-      assert :ok =
-               JidoGralkor.Runtime.replace(
-                 agent_server,
-                 ingestion_configuration("replacement-memory")
-               )
-
-      assert :ok = GenServer.stop(agent_server, :normal)
-      send(worker, :continue_lens_flush)
-      assert_receive {:runtime_ingestion, "runtime-memory"}
     end
   end
 
@@ -1510,17 +1392,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         end
       end
     end
-  end
-
-  defp capture(owner, session, operator, agent, user, messages, lens, additional) do
-    Gralkor.Client.capture(owner, %Gralkor.Capture{
-      session_id: session,
-      operator_id: operator,
-      agent_name: agent,
-      user_name: user,
-      messages: messages,
-      route: {:lenses, [lens | additional]}
-    })
   end
 
   defp ingestion_configuration(destination) do

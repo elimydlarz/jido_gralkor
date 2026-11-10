@@ -16,7 +16,7 @@ The package registers three Destinations:
 - `personal` is private to one operator. Its logical graph ID is `personal/<same operator id>`.
 - `generalisations` is the shared graph the packaged generalisation Reflection writes to and reads its prior generalisations from. Its logical graph ID is exactly `generalisations` for every operator.
 
-An application cannot register a Destination named `personal`, `global`, or `generalisations`; configuration naming one is rejected rather than replacing the packaged Destination. Only the packaged generalisation Reflection writes to `generalisations`: a consumer Lens, a consumer Reflection Destination output, or a plugin `capture_destination` naming it is rejected (`{:exclusive_destination, collection, name, "generalisations"}` in runtime configuration). Every operator reads it through any search that includes it, including selector-free search.
+An application cannot register a Destination named `personal`, `global`, or `generalisations`; configuration naming one is rejected rather than replacing the packaged Destination. Only the packaged generalisation Reflection writes to `generalisations`: a consumer Lens or a consumer Reflection Destination output naming it is rejected (`{:exclusive_destination, collection, name, "generalisations"}` in runtime configuration). Every operator reads it through any search that includes it, including selector-free search.
 
 An agent may register another Destination with only a name in its complete runtime configuration:
 
@@ -75,7 +75,7 @@ runtime_config = %{
 
 The packaged `personal-chat` Lens writes with `Gralkor.DefaultOntology`. The packaged generalisation Reflection has a `generalisations` Destination output with `Gralkor.DefaultOntology`; packaged ERL has a `personal` Destination output with `Gralkor.Reflection.ERLOntology`.
 
-Direct capture uses the built-in ontology without Lens authorship. `personal-chat` runs only when explicitly selected and uses the existing Store ingestion process for every supported source kind. Storage marks new direct writes with a terminal ` [gralkor: direct]` marker, then removes that marker from the public source description. User descriptions cannot override the actual writer. Lens and Reflection names reserve both writer delimiters.
+Direct memory addition uses the built-in ontology without Lens authorship. `personal-chat` runs only when explicitly selected and uses the existing Store ingestion process for every supported source kind. Storage marks new direct writes with a terminal ` [gralkor: direct]` marker, then removes that marker from the public source description. User descriptions cannot override the actual writer. Lens and Reflection names reserve both writer delimiters.
 
 Historical ` [lens: operator]` provenance stays intact, and older unmarked episodes remain readable without invented authorship. Destination-only or selector-free search includes these records; a `personal-chat` Lens filter does not relabel or include them. Incomplete Reflection artefacts still require their durable completion marker.
 
@@ -139,7 +139,7 @@ Every episode is written by exactly one writer, every fact is produced by the wr
 
 - `lens:<name>` — the registered Lens of that name (resolved from the agent's runtime for `search/2`);
 - `reflection:<name>` — the Reflection of that name, whose Destination output stored the memory (any non-blank name; consumer Reflections are not registered in jido_gralkor);
-- `direct` — direct capture and `memory_add`;
+- `direct` — `memory_add` and conversations captured before 18.0.0;
 - `unknown` — memory whose writer could not be determined, such as historical unmarked episodes;
 - `lens:*` — every Lens; `reflection:*` — every Reflection.
 

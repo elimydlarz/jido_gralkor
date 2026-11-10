@@ -48,7 +48,7 @@ defmodule Gralkor.Search do
   * `"lens:<name>"` — the Lens of that name;
   * `"reflection:<name>"` — the Reflection of that name, whose output is stored
     in memory;
-  * `"direct"` — direct capture and direct memory addition;
+  * `"direct"` — direct memory addition and conversations captured before 18.0.0;
   * `"unknown"` — memory whose writer could not be determined;
   * `"lens:*"` — every Lens;
   * `"reflection:*"` — every Reflection.

@@ -23,18 +23,8 @@ defmodule Gralkor.Client.InMemory do
   @doc "Set the response for the next (and all subsequent) `recall/4` calls."
   def set_recall(response), do: GenServer.call(__MODULE__, {:set, :recall, response})
 
-  @doc "Set the response for the next (and all subsequent) `capture/2` calls."
-  def set_capture(response), do: GenServer.call(__MODULE__, {:set, :capture, response})
-
   @doc "Set the response for the next (and all subsequent) `memory_add/3` calls."
   def set_memory_add(response), do: GenServer.call(__MODULE__, {:set, :memory_add, response})
-
-  @doc "Set the response for the next (and all subsequent) `flush/1` calls."
-  def set_flush(response), do: GenServer.call(__MODULE__, {:set, :flush, response})
-
-  @doc "Set the response for the next (and all subsequent) `flush_and_await/2` calls."
-  def set_flush_and_await(response),
-    do: GenServer.call(__MODULE__, {:set, :flush_and_await, response})
 
   @doc "Set the response for the next (and all subsequent) `build_indices/0` calls."
   def set_build_indices(response),
@@ -45,10 +35,7 @@ defmodule Gralkor.Client.InMemory do
     do: GenServer.call(__MODULE__, {:set, :build_communities, response})
 
   def recalls, do: GenServer.call(__MODULE__, {:calls, :recall})
-  def captures, do: GenServer.call(__MODULE__, {:calls, :capture})
   def adds, do: GenServer.call(__MODULE__, {:calls, :memory_add})
-  def flushes, do: GenServer.call(__MODULE__, {:calls, :flush})
-  def flush_and_awaits, do: GenServer.call(__MODULE__, {:calls, :flush_and_await})
   def indices_builds, do: GenServer.call(__MODULE__, {:calls, :build_indices})
   def communities_builds, do: GenServer.call(__MODULE__, {:calls, :build_communities})
 
@@ -61,47 +48,12 @@ defmodule Gralkor.Client.InMemory do
   end
 
   @impl Gralkor.Client
-  @spec capture(pid(), Gralkor.Capture.t()) :: :ok | {:error, term()}
-  def capture(runtime_owner, %Gralkor.Capture{} = request) do
-    Gralkor.Capture.resolve!(runtime_owner, request)
-    GenServer.call(__MODULE__, {:call, :capture, [runtime_owner, request]})
-  end
-
-  for arity <- [5, 6, 7, 8] do
-    arguments = Macro.generate_arguments(arity, __MODULE__)
-
-    def capture(unquote_splicing(arguments)) do
-      raise ArgumentError,
-            "positional capture/#{unquote(arity)} is retired; use Gralkor.Client.capture(runtime_owner, %Gralkor.Capture{route: {:direct, destination} | {:lenses, names}})"
-    end
-  end
-
-  @impl Gralkor.Client
   def memory_add(group_id, content, source),
     do: GenServer.call(__MODULE__, {:call, :memory_add, [group_id, content, source]})
 
   @impl Gralkor.Client
   def memory_add(group_id, content, source, source_kind),
     do: GenServer.call(__MODULE__, {:call, :memory_add, [group_id, content, source, source_kind]})
-
-  @impl Gralkor.Client
-  def flush(session_id) do
-    raise_if_blank!(:session_id, session_id)
-    GenServer.call(__MODULE__, {:call, :flush, [session_id]})
-    :ok
-  end
-
-  @impl Gralkor.Client
-  def flush_and_await(session_id, timeout_ms) do
-    raise_if_blank!(:session_id, session_id)
-
-    unless is_integer(timeout_ms) and timeout_ms > 0 do
-      raise ArgumentError,
-            "Gralkor.Client.InMemory: timeout_ms must be a positive integer, got #{inspect(timeout_ms)}"
-    end
-
-    GenServer.call(__MODULE__, {:call, :flush_and_await, [session_id, timeout_ms]})
-  end
 
   @impl Gralkor.Client
   def build_indices,

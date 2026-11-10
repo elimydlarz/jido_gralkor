@@ -677,13 +677,19 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert [%{artefact: %{id: "amber-review"}, reflection: "review"}] = episodes
     end
 
-    test "and `direct` names direct capture and direct memory addition" do
+    test "and `direct` names direct memory addition and conversations captured before 18.0.0" do
       start_native_graph() |> seed_lens_graph() |> record_seeded_writers()
 
-      turns = [[Gralkor.Message.new("user", "amber captured memory")]]
-
       assert :ok =
-               Gralkor.Application.build_flush_callback(nil).("first", "Susu", "Eli", nil, turns)
+               Gralkor.GraphitiPool.add_episode(
+                 Gralkor.GraphitiPool,
+                 "first",
+                 "Eli: amber captured memory",
+                 "captured",
+                 nil,
+                 source_kind: :conversation,
+                 writer: :direct
+               )
 
       assert {:ok, [%{episodes: episodes}]} = writer_search(["direct"])
 
@@ -723,7 +729,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
   end
 
   describe "when memory is written to a Destination" do
-    test "then each episode is written by exactly one writer: the Lens it was ingested through, the Reflection whose output it stores, or direct capture or addition" do
+    test "then each episode is written by exactly one writer: the Lens it was ingested through, the Reflection whose output it stores, or direct addition" do
       start_native_graph()
       assert :ok = ingest("amber-alpha", "first-alpha", "amber alpha memory")
       assert :ok = put_artefact("first", "review", "amber-review", "amber artefact memory")

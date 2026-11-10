@@ -19,66 +19,37 @@ defmodule Gralkor.Client.InMemoryTest do
   defp client, do: InMemory
 
   defp configure_recall(response), do: InMemory.set_recall(response)
-  defp configure_capture(response), do: InMemory.set_capture(response)
-  defp configure_flush(response), do: InMemory.set_flush(response)
-  defp configure_flush_and_await(response), do: InMemory.set_flush_and_await(response)
   defp configure_memory_add(response), do: InMemory.set_memory_add(response)
   defp configure_build_indices(response), do: InMemory.set_build_indices(response)
   defp configure_build_communities(response), do: InMemory.set_build_communities(response)
 
-  describe "when recall, capture, flush-and-await, memory addition, index rebuilding, or community building is called" do
+  describe "when recall, memory addition, index rebuilding, or community building is called" do
     @describetag :integration
     test "then the call is recorded with every argument it was given, so a consumer's exact request can be inspected afterwards" do
       InMemory.set_recall({:ok, "block"})
-      InMemory.set_capture(:ok)
-      InMemory.set_flush_and_await(:ok)
       InMemory.set_memory_add(:ok)
       InMemory.set_build_indices({:ok, %{status: "built"}})
       InMemory.set_build_communities({:ok, %{communities: 1, edges: 2}})
 
       InMemory.recall("g-1", "TestAgent", "s-1", "q?")
 
-      Gralkor.CaptureFixture.capture(InMemory, "s-1", "g-1", "TestAgent", "Eli", [
-        Gralkor.Message.new("user", "hi")
-      ])
-
-      InMemory.flush_and_await("s-1", 500)
       InMemory.memory_add("g-1", "fact", "source", :document)
       InMemory.build_indices()
       InMemory.build_communities("g-1")
 
       assert [["g-1", "TestAgent", "s-1", "q?"]] = InMemory.recalls()
 
-      assert [
-               [
-                 _,
-                 %Gralkor.Capture{
-                   session_id: "s-1",
-                   route: {:direct, "g-1"},
-                   agent_name: "TestAgent",
-                   user_name: "Eli"
-                 }
-               ]
-             ] = InMemory.captures()
-
-      assert [["s-1", 500]] = InMemory.flush_and_awaits()
       assert [["g-1", "fact", "source", :document]] = InMemory.adds()
       assert [[]] = InMemory.indices_builds()
       assert [["g-1"]] = InMemory.communities_builds()
     end
   end
 
-  describe "if recall, capture, flush-and-await, memory addition, index rebuilding, or community building is called > while no response is configured for it" do
+  describe "if recall, memory addition, index rebuilding, or community building is called > while no response is configured for it" do
     @describetag :integration
     test "then a not-configured error is returned rather than a fabricated success" do
       assert {:error, :not_configured} = InMemory.recall("g", "TestAgent", "s", "q")
 
-      assert {:error, :not_configured} =
-               Gralkor.CaptureFixture.capture(InMemory, "s", "g", "TestAgent", "Eli", [
-                 Gralkor.Message.new("user", "hi")
-               ])
-
-      assert {:error, :not_configured} = InMemory.flush_and_await("s", 500)
       assert {:error, :not_configured} = InMemory.memory_add("g", "fact", "source", :document)
       assert {:error, :not_configured} = InMemory.build_indices()
       assert {:error, :not_configured} = InMemory.build_communities("g")
@@ -118,31 +89,4 @@ defmodule Gralkor.Client.InMemoryTest do
   end
 
   run_contract(do: fn -> :ok end)
-
-  describe "if flush-and-await receives a timeout that is not a positive integer" do
-    test "then an argument error is raised" do
-      assert_raise ArgumentError, fn -> InMemory.flush_and_await("session", 0) end
-    end
-
-    test "and the error identifies the invalid timeout" do
-      error = assert_raise ArgumentError, fn -> InMemory.flush_and_await("session", 0) end
-      assert Exception.message(error) =~ "timeout_ms"
-      assert Exception.message(error) =~ "0"
-    end
-
-    test "and no backend call is made" do
-      assert_raise ArgumentError, fn -> InMemory.flush_and_await("session", -1) end
-      assert InMemory.flush_and_awaits() == []
-    end
-  end
-
-  describe "if an obsolete positional capture arity is called" do
-    test "then the adapter raises an explicit typed-request migration error" do
-      for arity <- [5, 6, 7, 8] do
-        assert_raise ArgumentError, ~r/positional capture.*retired.*Gralkor.Capture/, fn ->
-          apply(InMemory, :capture, List.duplicate("old", arity))
-        end
-      end
-    end
-  end
 end

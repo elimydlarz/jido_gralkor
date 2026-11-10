@@ -2,14 +2,14 @@ Unit: gralkor-application (src: lib/gralkor/application.ex; unit: test/gralkor/a
 
 when the application starts
   while a remote FalkorDB connection is configured
-    then the Python runtime, graph pool, and capture buffer are supervised in that order
+    then the Python runtime and graph pool are supervised in that order
     and the graph pool is constructed with the remote connection, so no embedded server is spawned
     and the graph pool receives no embedded socket timeout
     and the Python runtime is told not to sweep for orphaned embedded servers, this deployment never having spawned one
     and a configured data directory is ignored
   while a data directory is configured
     while no remote connection is configured
-      then the Python runtime, graph pool, and capture buffer are supervised in that order
+      then the Python runtime and graph pool are supervised in that order
       and the graph pool is constructed with the embedded connection
       and the graph pool receives the configured embedded socket timeout
       and the Python runtime is told to sweep for orphaned embedded servers, this deployment spawning one of its own
@@ -23,34 +23,3 @@ if the remote FalkorDB configuration is not a keyword list carrying a host and a
 
 if the retired `:reflection_storage` setting is configured
   then application startup fails identifying Destination outputs as the artefact memory boundary
-
-when a capture flush runs
-  then the transcript episode is rendered from the user and assistant text of every captured turn only, with no agent reasoning and no inference call
-  and the rendered transcript is written as a captured episode
-  and storage-owned direct writer provenance is recorded without a Lens
-
-when a capture flush writes its captured episode successfully
-  then a single line reporting the group, the transcript size, and the duration is logged
-  and the flush reports success
-  where test mode is enabled
-    then the rendered transcript itself is logged, so what actually landed in memory is readable from the logs
-
-when a legacy or Lens capture flush renders an empty transcript
-  then no legacy episode write or Lens ingestion is submitted
-  and the flush reports success
-
-if writing the captured episode fails
-  then no success line is logged, so a failed attempt is never recorded as a success
-  and a concise warning naming the group and the reason is logged
-  and the failure is returned unchanged, so the capture buffer owns retry and backoff
-
-when a capture flush is retried after its captured episode has already been written
-  then that captured episode is written a second time, because episode writes are not idempotent
-
-when a Lens capture flush runs
-  then the selected turns are rendered in the order they were appended
-  and the rendered transcript is submitted through the selected Lens as a captured episode
-  while an owning AgentServer is supplied as the runtime target
-    then the captured episode is submitted through that AgentServer's runtime-targeted Lens ingestion
-  while no runtime target is supplied
-    then the captured episode is submitted through application-compatibility Lens ingestion

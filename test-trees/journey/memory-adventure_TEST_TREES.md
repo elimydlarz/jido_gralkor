@@ -1,15 +1,15 @@
 Journey: memory-adventure (journey: test/journey/memory_adventure_journey_test.exs)
 
-# Adventure: one operator adds default-ontology direct personal memory, captures direct and personal-chat turns without duplicate writes, flushes completed turns through an appending Lens, asynchronously triggers an ERL Learning, evolves a shared generalisation, and publishes global memory.
+# Adventure: one operator adds default-ontology direct personal memory, adds a direct conversation, remembers chat transcripts through the personal-chat and an appending Lens without duplicate writes, asynchronously triggers an ERL Learning, evolves a shared generalisation, and publishes global memory.
 # Fresh sessions then use default and Destination-selected memory search across packaged and application Destinations; both operators check shared and personal visibility.
 
 when two operators use direct personal memory, Lenses, and asynchronously triggered Reflections
   then default-ontology direct personal memory remains recallable
   and recall presents that memory in the memory search format inside an untrusted memory block
-  and direct conversation capture remains searchable without Lens or Reflection authorship
+  and a direct conversation remains searchable without Lens or Reflection authorship
   and personal-chat processing records its actual Lens provenance
-  and alternating direct and personal-chat turns writes one episode for each selected route
-  and captured appending-Lens information remains searchable
+  and the direct conversation and the personal-chat transcript each write one episode
+  and appending-Lens transcript information remains searchable
   and ERL writes a structured Learning artefact through its Destination output
   and ERL remains absent from the other operator's personal Destination
   and the global graph is visible to both operators
@@ -59,7 +59,7 @@ when the Journey consumer searches including one Lens as a writer
 when the Journey ingests conversation, document, and structured-record episodes
   then every retrieved conversation fact identifies every originating episode
   and every retrieved conversation fact identifies its conversation source kind
-  and every retrieved conversation fact identifies its captured-turn source description
+  and every retrieved conversation fact identifies its chat-transcript source description
   and every retrieved document fact identifies every originating episode
   and every retrieved document fact identifies its document source kind
   and a retrieved document fact identifies its deployment-policy source description

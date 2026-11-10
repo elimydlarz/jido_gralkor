@@ -80,7 +80,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     {:ok, _owner} = Registry.register(Jido.registry_name(@plugin_jido), "operator-one", %{})
 
     InMemory.reset()
-    InMemory.set_capture(:ok)
 
     on_exit(fn ->
       restore_env(:client, previous_client)
@@ -104,7 +103,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       assert tool_context.gralkor_runtime == self()
     end
 
-    test "and directly captured conversation facts identify their conversation origin" do
+    test "and directly written conversation facts identify their conversation origin" do
       Application.put_env(:jido_gralkor, :destination_storage, SourceFactFixture)
 
       assert {:ok, %{result: "Source: direct conversation\n- direct fact"}} =
@@ -294,7 +293,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   end
 
   describe "when a mounted memory plugin has an ingestion Lens declared by its consuming agent's runtime configuration" do
-    test "then automatic capture and memory addition use that runtime-owned Lens" do
+    test "then memory addition uses that runtime-owned Lens" do
       Application.put_env(:jido_gralkor, :lenses, [
         [
           name: "observations",
@@ -328,16 +327,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
              end)
 
       assert destination_episodes("decisions") == []
-
-      completion = completion_agent(agent, "default-request", tool_context)
-
-      assert {:ok, :continue} =
-               Plugin.handle_signal(
-                 completion_signal("default-request", "remembered"),
-                 %{jido_instance: @plugin_jido, partition: nil, agent: completion}
-               )
-
-      assert [[_, %Gralkor.Capture{route: {:lenses, ["observations"]}}]] = InMemory.captures()
     end
 
     test "and the plugin does not redefine the selected Lens's Destination or ingestion process" do
@@ -349,15 +338,13 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
       assert plugin_state == %{
                agent_name: "Susu",
-               capture_destination: "personal",
                ingestion_lens: "observations"
              }
 
-      assert {:ok, {:continue, %{data: %{tool_context: tool_context, extra_refs: refs}}}} =
+      assert {:ok, {:continue, %{data: %{tool_context: tool_context}}}} =
                query(agent(plugin_state))
 
       assert tool_context.lens == "observations"
-      assert refs.jido_gralkor_lens == "observations"
     end
   end
 
@@ -388,138 +375,10 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
                destination_episodes("decisions") != []
              end)
     end
-
-    test "and that Lens is retained for the request" do
-      assert {:ok, plugin_state} =
-               mount(
-                 agent_name: "Susu",
-                 ingestion_lens: "observations"
-               )
-
-      assert {:ok,
-              {:continue,
-               %{
-                 data: %{
-                   tool_context: %{lens: "decisions"},
-                   extra_refs: %{jido_gralkor_lens: "decisions"}
-                 }
-               }}} =
-               query(agent(plugin_state), "decisions")
-    end
-
-    test "and completion without a repeated Lens captures through the retained request Lens" do
-      assert {:ok, plugin_state} =
-               mount(
-                 agent_name: "Susu",
-                 ingestion_lens: "observations"
-               )
-
-      request_id = "decision-request"
-
-      query_signal = %Jido.Signal{
-        id: "query-signal",
-        source: "/functional",
-        type: "ai.react.query",
-        data: %{
-          request_id: request_id,
-          query: "Record a decision",
-          tool_context: %{lens: "decisions"}
-        }
-      }
-
-      query_agent = %{
-        id: "operator-one",
-        state: %{__memory__: plugin_state, __thread__: %{id: "session-one"}}
-      }
-
-      assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
-               Plugin.handle_signal(query_signal, %{
-                 jido_instance: @plugin_jido,
-                 partition: nil,
-                 agent: query_agent
-               })
-
-      completion_agent = %{
-        query_agent
-        | state:
-            Map.merge(query_agent.state, %{
-              __strategy__: %{
-                request_traces: %{
-                  request_id => %{events: [%{kind: :llm_completed, data: %{}}]}
-                }
-              },
-              __thread__: thread_with_request_lens(request_id, retained_refs),
-              requests: %{
-                request_id => %{query: "Record a decision", status: :pending, result: nil}
-              },
-              user_name: "Eli"
-            })
-      }
-
-      completion_signal = %Jido.Signal{
-        id: "completion-signal",
-        source: "/functional",
-        type: "ai.request.completed",
-        data: %{request_id: request_id, result: "We chose Friday."}
-      }
-
-      assert {:ok, :continue} =
-               Plugin.handle_signal(completion_signal, %{
-                 jido_instance: @plugin_jido,
-                 partition: nil,
-                 agent: completion_agent
-               })
-
-      assert [
-               [
-                 _,
-                 %Gralkor.Capture{
-                   session_id: "session-one",
-                   operator_id: "operator-one",
-                   agent_name: "Susu",
-                   user_name: "Eli",
-                   route: {:lenses, ["decisions"]}
-                 }
-               ]
-             ] =
-               InMemory.captures()
-    end
-
-    test "and failure without a repeated Lens captures through the retained request Lens" do
-      assert {:ok, plugin_state} =
-               mount(
-                 agent_name: "Susu",
-                 ingestion_lens: "observations"
-               )
-
-      request_id = "failed-decision-request"
-      query_agent = agent(plugin_state)
-
-      assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
-               query(query_agent, "decisions", request_id)
-
-      failed_agent = completion_agent(query_agent, request_id, retained_refs)
-
-      failure_signal = %Jido.Signal{
-        id: "failure-signal",
-        source: "/functional",
-        type: "ai.request.failed",
-        data: %{request_id: request_id, error: :rejected}
-      }
-
-      assert {:ok, :continue} =
-               Plugin.handle_signal(failure_signal, %{
-                 jido_instance: @plugin_jido,
-                 partition: nil,
-                 agent: failed_agent
-               })
-
-      assert [[_, %Gralkor.Capture{route: {:lenses, ["decisions"]}}]] = InMemory.captures()
-    end
   end
 
   describe "if an agent turn selects an unknown or non-binary Lens" do
-    test "then handling the turn fails before memory addition or capture" do
+    test "then handling the turn fails before memory addition" do
       assert {:ok, plugin_state} =
                mount(agent_name: "Susu", ingestion_lens: "observations")
 
@@ -541,7 +400,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
       end
 
       assert InMemory.adds() == []
-      assert InMemory.captures() == []
     end
 
     test "and the invalid Lens is identified" do
@@ -567,129 +425,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
 
         assert Exception.message(error) =~ inspect(invalid)
       end
-    end
-  end
-
-  describe "when turns in one session select different Lenses" do
-    test "then each Lens retains only the turns selected for it" do
-      assert {:ok, plugin_state} =
-               mount(
-                 agent_name: "Susu",
-                 ingestion_lens: "observations"
-               )
-
-      for {request_id, lens, result} <- [
-            {"observation-request", "observations", "Observed."},
-            {"decision-request", "decisions", "Decided."}
-          ] do
-        base_agent = agent(plugin_state)
-
-        assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
-                 query(base_agent, lens, request_id)
-
-        completed_agent = completion_agent(base_agent, request_id, retained_refs)
-
-        assert {:ok, :continue} =
-                 Plugin.handle_signal(
-                   completion_signal(request_id, result),
-                   %{jido_instance: @plugin_jido, partition: nil, agent: completed_agent}
-                 )
-      end
-
-      assert [
-               [
-                 _,
-                 %Gralkor.Capture{
-                   messages: observation_messages,
-                   route: {:lenses, ["observations"]}
-                 }
-               ],
-               [_, %Gralkor.Capture{messages: decision_messages, route: {:lenses, ["decisions"]}}]
-             ] = InMemory.captures()
-
-      assert Enum.any?(observation_messages, &(&1.content == "Observed."))
-      assert Enum.any?(decision_messages, &(&1.content == "Decided."))
-    end
-
-    test "and no flushed episode combines turns governed by different ontologies or ingestion processes" do
-      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
-      start_lens_capture_buffer()
-
-      assert {:ok, plugin_state} =
-               mount(
-                 agent_name: "Susu",
-                 ingestion_lens: "observations"
-               )
-
-      for {request_id, lens} <- [
-            {"observation-request", "observations"},
-            {"decision-request", "decisions"}
-          ] do
-        base_agent = agent(plugin_state)
-
-        assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
-                 query(base_agent, lens, request_id)
-
-        assert {:ok, :continue} =
-                 Plugin.handle_signal(
-                   completion_signal(request_id, "#{lens} result"),
-                   %{
-                     jido_instance: @plugin_jido,
-                     partition: nil,
-                     agent: completion_agent(base_agent, request_id, retained_refs)
-                   }
-                 )
-      end
-
-      assert :ok = Gralkor.Client.Native.flush_and_await("session-one", 1_000)
-
-      assert [%{content: observation_episode}] =
-               destination_episodes("observations")
-
-      assert [%{content: decision_episode}] =
-               destination_episodes("decisions")
-
-      assert observation_episode =~ "observations result"
-      refute observation_episode =~ "decisions result"
-      assert decision_episode =~ "decisions result"
-      refute decision_episode =~ "observations result"
-    end
-
-    test "and captured turns retain their original order" do
-      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
-      start_lens_capture_buffer()
-
-      assert {:ok, plugin_state} =
-               mount(
-                 agent_name: "Susu",
-                 ingestion_lens: "observations"
-               )
-
-      for request_id <- ["first-request", "second-request"] do
-        base_agent = agent(plugin_state)
-
-        assert {:ok, {:continue, %{data: %{extra_refs: retained_refs}}}} =
-                 query(base_agent, "observations", request_id)
-
-        assert {:ok, :continue} =
-                 Plugin.handle_signal(
-                   completion_signal(request_id, request_id),
-                   %{
-                     jido_instance: @plugin_jido,
-                     partition: nil,
-                     agent: completion_agent(base_agent, request_id, retained_refs)
-                   }
-                 )
-      end
-
-      assert :ok = Gralkor.Client.Native.flush_and_await("session-one", 1_000)
-
-      assert [%{content: episode}] =
-               destination_episodes("observations")
-
-      {first_position, _first_length} = :binary.match(episode, "first-request")
-      {second_position, _second_length} = :binary.match(episode, "second-request")
-      assert first_position < second_position
     end
   end
 
@@ -735,164 +470,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     end
   end
 
-  describe "when a mounted memory plugin has an explicit capture Destination and no ingestion Lens" do
-    test "then automatic capture selects that Destination directly for the current operator" do
-      assert {:ok, state} = mount(agent_name: "Susu")
-      base = agent(state)
-      assert {:ok, {:continue, %{data: %{extra_refs: refs}}}} = query(base)
-
-      assert {:ok, :continue} =
-               Plugin.handle_signal(completion_signal("request-one", "Direct"), %{
-                 jido_instance: @plugin_jido,
-                 partition: nil,
-                 agent: completion_agent(base, "request-one", refs)
-               })
-
-      assert [[_, %Gralkor.Capture{operator_id: "operator-one", route: {:direct, "personal"}}]] =
-               InMemory.captures()
-    end
-
-    test "and no packaged Lens is selected implicitly" do
-      assert {:ok, state} = mount(agent_name: "Susu")
-      assert {:ok, {:continue, %{data: %{tool_context: context}}}} = query(agent(state))
-      assert context.lens == nil
-    end
-  end
-
-  describe "where an agent turn explicitly selects direct capture after a Lens-selected turn" do
-    test "then completion retains that request's direct route" do
-      assert {:ok, state} = mount(agent_name: "Susu", ingestion_lens: "observations")
-      base = agent(state)
-
-      assert {:ok, {:continue, %{data: %{extra_refs: refs}}}} =
-               query_direct(base, "direct-request")
-
-      assert {:ok, :continue} =
-               Plugin.handle_signal(completion_signal("direct-request", "Direct"), %{
-                 jido_instance: @plugin_jido,
-                 partition: nil,
-                 agent: completion_agent(base, "direct-request", refs)
-               })
-
-      assert [[_, %Gralkor.Capture{route: {:direct, "personal"}}]] = InMemory.captures()
-    end
-
-    test "and failure retains that request's direct route" do
-      assert {:ok, state} = mount(agent_name: "Susu", ingestion_lens: "observations")
-      base = agent(state)
-
-      assert {:ok, {:continue, %{data: %{extra_refs: refs}}}} =
-               query_direct(base, "direct-request")
-
-      signal = %Jido.Signal{
-        id: "failed",
-        source: "/functional",
-        type: "ai.request.failed",
-        data: %{request_id: "direct-request", error: "failed"}
-      }
-
-      assert {:ok, :continue} =
-               Plugin.handle_signal(signal, %{
-                 jido_instance: @plugin_jido,
-                 partition: nil,
-                 agent: completion_agent(base, "direct-request", refs)
-               })
-
-      assert [[_, %Gralkor.Capture{route: {:direct, "personal"}}]] = InMemory.captures()
-    end
-  end
-
-  describe "when turns in one session alternate direct capture and selected Lenses" do
-    test "then each route receives only its selected turns in original order" do
-      assert {:ok, state} = mount(agent_name: "Susu", ingestion_lens: "observations")
-      base = agent(state)
-
-      for {id, lens} <- [
-            {"lens-one", "observations"},
-            {"direct-one", nil},
-            {"lens-two", "decisions"}
-          ] do
-        result = if lens, do: query(base, lens, id), else: query_direct(base, id)
-        assert {:ok, {:continue, %{data: %{extra_refs: refs}}}} = result
-
-        assert {:ok, :continue} =
-                 Plugin.handle_signal(completion_signal(id, id), %{
-                   jido_instance: @plugin_jido,
-                   partition: nil,
-                   agent: completion_agent(base, id, refs)
-                 })
-      end
-
-      assert Enum.map(InMemory.captures(), fn [_, request] -> request.route end) == [
-               {:lenses, ["observations"]},
-               {:direct, "personal"},
-               {:lenses, ["decisions"]}
-             ]
-    end
-
-    test "and different Lenses sharing a Destination each run their own ingestion process" do
-      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
-      start_lens_capture_buffer()
-      configuration = runtime_configuration()
-      lenses = Enum.map(configuration.lenses, &Map.put(&1, :destination, "personal"))
-      assert :ok = JidoGralkor.Runtime.replace(self(), %{configuration | lenses: lenses})
-
-      request = %Gralkor.Capture{
-        session_id: "session-one",
-        operator_id: "operator-one",
-        agent_name: "Susu",
-        user_name: "Eli",
-        messages: [Gralkor.Message.new("user", "shared")],
-        route: {:lenses, ["observations", "decisions"]}
-      }
-
-      assert :ok = Client.capture(self(), request)
-      assert :ok = Client.impl().flush_and_await("session-one", 1_000)
-
-      assert Enum.map(destination_episodes("personal"), & &1.lens) == [
-               "observations",
-               "decisions"
-             ]
-    end
-
-    test "and repeated selected Lens names run only once for each selected batch" do
-      Application.put_env(:jido_gralkor, :client, Gralkor.Client.Native)
-      start_lens_capture_buffer()
-
-      request = %Gralkor.Capture{
-        session_id: "session-one",
-        operator_id: "operator-one",
-        agent_name: "Susu",
-        user_name: "Eli",
-        messages: [Gralkor.Message.new("user", "once")],
-        route: {:lenses, ["observations", "observations"]}
-      }
-
-      assert :ok = Client.capture(self(), request)
-      assert :ok = Client.impl().flush_and_await("session-one", 1_000)
-      assert [%{content: "Eli: once"}] = destination_episodes("observations")
-    end
-  end
-
-  describe "if a mounted plugin receives invalid capture Destination configuration" do
-    test "then mounting fails before the plugin handles an agent signal" do
-      assert_raise ArgumentError, fn ->
-        mount(agent_name: "Susu", capture_destination: "missing")
-      end
-
-      assert InMemory.captures() == []
-    end
-
-    test "and the error identifies the rejected Destination" do
-      error =
-        assert_raise ArgumentError, fn ->
-          mount(agent_name: "Susu", capture_destination: "missing")
-        end
-
-      assert Exception.message(error) =~ "missing"
-    end
-  end
-
   defp mounted_search_context do
     assert {:ok, plugin_state} = mount(agent_name: "Susu", ingestion_lens: "observations")
     mounted_agent = agent(plugin_state)
@@ -901,24 +478,12 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     Map.put(tool_context, :agent_id, mounted_agent.id)
   end
 
-  defp query_direct(agent, id) do
-    signal = %Jido.Signal{
-      id: "query-#{id}",
-      source: "/functional",
-      type: "ai.react.query",
-      data: %{request_id: id, query: "Remember direct", tool_context: %{lens: nil}}
-    }
-
-    Plugin.handle_signal(signal, %{jido_instance: @plugin_jido, partition: nil, agent: agent})
-  end
-
   defp agent(plugin_state) do
     %{
       id: "operator-one",
       state: %{
         __memory__: plugin_state,
-        __thread__: %{id: "session-one"},
-        user_name: "Eli"
+        __thread__: %{id: "session-one"}
       }
     }
   end
@@ -926,9 +491,7 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
   defp mount(opts) do
     Plugin.mount(
       %{},
-      opts
-      |> Keyword.put_new(:capture_destination, "personal")
-      |> Keyword.put_new(:runtime_config, runtime_configuration())
+      Keyword.put_new(opts, :runtime_config, runtime_configuration())
     )
   end
 
@@ -977,55 +540,6 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     }
 
     Plugin.handle_signal(signal, %{jido_instance: @plugin_jido, partition: nil, agent: agent})
-  end
-
-  defp completion_agent(agent, request_id, retained_refs) do
-    %{
-      agent
-      | state:
-          Map.merge(agent.state, %{
-            __strategy__: %{
-              request_traces: %{
-                request_id => %{events: [%{kind: :llm_completed, data: %{}}]}
-              }
-            },
-            __thread__: thread_with_request_lens(request_id, retained_refs),
-            requests: %{
-              request_id => %{query: request_id, status: :pending, result: nil}
-            }
-          })
-    }
-  end
-
-  defp thread_with_request_lens(request_id, retained_refs) do
-    %{
-      id: "session-one",
-      entries: [
-        %{
-          kind: :ai_message,
-          payload: %{role: :user},
-          refs: Map.put(retained_refs, :request_id, request_id)
-        }
-      ]
-    }
-  end
-
-  defp completion_signal(request_id, result) do
-    %Jido.Signal{
-      id: "completion-signal-#{request_id}",
-      source: "/functional",
-      type: "ai.request.completed",
-      data: %{request_id: request_id, result: result}
-    }
-  end
-
-  defp start_lens_capture_buffer do
-    start_supervised!(
-      {Gralkor.CaptureBuffer,
-       flush_callback: fn _, _, _, _, _ -> :ok end,
-       lens_flush_callback: Gralkor.Application.build_lens_flush_callback(),
-       retries: []}
-    )
   end
 
   defp eventually(fun, attempts \\ 50)

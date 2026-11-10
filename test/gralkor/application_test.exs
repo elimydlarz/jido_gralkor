@@ -34,21 +34,7 @@ defmodule Gralkor.ApplicationTest do
     Application.delete_env(:jido_gralkor, :client)
     Application.delete_env(:jido_gralkor, :falkordb)
     Application.delete_env(:jido_gralkor, :reflection_storage)
-
-    test_pid = self()
-
-    recording_add = fn group, body, source, ontology, _opts ->
-      send(test_pid, {:add, group, body, source, ontology})
-      :ok
-    end
-
-    turn = [
-      Gralkor.Message.new("user", "Q"),
-      Gralkor.Message.new("behaviour", "thinking"),
-      Gralkor.Message.new("assistant", "A")
-    ]
-
-    %{recording_add: recording_add, turn: turn}
+    :ok
   end
 
   describe "when the application starts > while neither a remote connection nor a data directory is configured" do
@@ -60,18 +46,12 @@ defmodule Gralkor.ApplicationTest do
   end
 
   describe "when the application starts > while a data directory is configured > while no remote connection is configured" do
-    test "then the Python runtime, graph pool, and capture buffer are supervised in that order" do
+    test "then the Python runtime and graph pool are supervised in that order" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
 
       children = App.children()
 
-      assert length(children) == 3
-
-      [first, second, third] = children
-
-      assert {Gralkor.Python, [reap_orphans: true]} = first
-      assert {Gralkor.GraphitiPool, _} = second
-      assert {Gralkor.CaptureBuffer, _} = third
+      assert [{Gralkor.Python, [reap_orphans: true]}, {Gralkor.GraphitiPool, _}] = children
     end
 
     test "and the graph pool is constructed with the embedded connection" do
@@ -83,7 +63,7 @@ defmodule Gralkor.ApplicationTest do
 
       System.put_env("GRALKOR_DATA_DIR", data_dir)
 
-      [_python, {Gralkor.GraphitiPool, opts}, _buffer] = App.children()
+      [_python, {Gralkor.GraphitiPool, opts}] = App.children()
 
       assert Keyword.fetch!(opts, :falkordb_spec) == {:embedded, Path.expand(data_dir)}
     end
@@ -92,7 +72,7 @@ defmodule Gralkor.ApplicationTest do
       configure_embedded_socket_timeout(12_345)
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
 
-      [_python, {Gralkor.GraphitiPool, opts}, _buffer] = App.children()
+      [_python, {Gralkor.GraphitiPool, opts}] = App.children()
 
       assert Keyword.fetch!(opts, :embedded_falkordb_socket_timeout_ms) == 12_345
     end
@@ -100,20 +80,19 @@ defmodule Gralkor.ApplicationTest do
     test "and the Python runtime is told to sweep for orphaned embedded servers, this deployment spawning one of its own" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
 
-      assert [{Gralkor.Python, [reap_orphans: true]}, _, _] = App.children()
+      assert [{Gralkor.Python, [reap_orphans: true]}, _] = App.children()
     end
   end
 
   describe "when the application starts > while a remote FalkorDB connection is configured" do
-    test "then the Python runtime, graph pool, and capture buffer are supervised in that order" do
+    test "then the Python runtime and graph pool are supervised in that order" do
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
       children = App.children()
 
       assert Enum.map(children, fn {module, _opts} -> module end) == [
                Gralkor.Python,
-               Gralkor.GraphitiPool,
-               Gralkor.CaptureBuffer
+               Gralkor.GraphitiPool
              ]
     end
 
@@ -125,7 +104,7 @@ defmodule Gralkor.ApplicationTest do
         password: "secret"
       )
 
-      [_python, {Gralkor.GraphitiPool, opts}, _buffer] = App.children()
+      [_python, {Gralkor.GraphitiPool, opts}] = App.children()
 
       assert Keyword.fetch!(opts, :falkordb_spec) ==
                {:remote,
@@ -136,7 +115,7 @@ defmodule Gralkor.ApplicationTest do
       configure_embedded_socket_timeout(12_345)
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
-      [_python, {Gralkor.GraphitiPool, opts}, _buffer] = App.children()
+      [_python, {Gralkor.GraphitiPool, opts}] = App.children()
 
       refute Keyword.has_key?(opts, :embedded_falkordb_socket_timeout_ms)
     end
@@ -144,14 +123,14 @@ defmodule Gralkor.ApplicationTest do
     test "and the Python runtime is told not to sweep for orphaned embedded servers, this deployment never having spawned one" do
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
-      assert [{Gralkor.Python, [reap_orphans: false]}, _, _] = App.children()
+      assert [{Gralkor.Python, [reap_orphans: false]}, _] = App.children()
     end
 
     test "and a configured data directory is ignored" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
       Application.put_env(:jido_gralkor, :falkordb, host: "falkor.example", port: 6379)
 
-      [{Gralkor.Python, [reap_orphans: false]}, {Gralkor.GraphitiPool, opts}, _] =
+      [{Gralkor.Python, [reap_orphans: false]}, {Gralkor.GraphitiPool, opts}] =
         App.children()
 
       assert {:remote, _} = Keyword.fetch!(opts, :falkordb_spec)
@@ -181,140 +160,6 @@ defmodule Gralkor.ApplicationTest do
     end
   end
 
-  describe "when a Lens capture flush runs" do
-    test "then the selected turns are rendered in the order they were appended" do
-      test_pid = self()
-
-      ingest = fn request ->
-        send(test_pid, {:ingested, request})
-        :ok
-      end
-
-      callback = App.build_lens_flush_callback(ingest_fn: ingest)
-
-      turns = [
-        [Gralkor.Message.new("user", "Remember this")],
-        [Gralkor.Message.new("assistant", "I will")]
-      ]
-
-      assert :ok =
-               callback.(
-                 "operator-one",
-                 "Susu",
-                 "Eli",
-                 "observations",
-                 turns,
-                 "ingestion-one",
-                 nil
-               )
-
-      assert_receive {:ingested,
-                      %Gralkor.Ingest{
-                        id: "ingestion-one",
-                        operator_id: "operator-one",
-                        lens: "observations",
-                        content: "Eli: Remember this\nSusu: I will",
-                        source_description: "captured"
-                      }}
-    end
-
-    test "and the rendered transcript is submitted through the selected Lens as a captured episode" do
-      test_pid = self()
-
-      callback =
-        App.build_lens_flush_callback(
-          ingest_fn: fn request ->
-            send(test_pid, {:ingested, request})
-            :ok
-          end
-        )
-
-      turns = [
-        [Gralkor.Message.new("user", "Remember this")],
-        [Gralkor.Message.new("assistant", "I will")]
-      ]
-
-      assert :ok =
-               callback.(
-                 "operator-one",
-                 "Susu",
-                 "Eli",
-                 "observations",
-                 turns,
-                 "ingestion-one",
-                 nil
-               )
-
-      assert_receive {:ingested,
-                      %Gralkor.Ingest{
-                        id: "ingestion-one",
-                        operator_id: "operator-one",
-                        lens: "observations",
-                        source_kind: :conversation,
-                        content: "Eli: Remember this\nSusu: I will",
-                        source_description: "captured"
-                      }}
-    end
-  end
-
-  describe "when a Lens capture flush runs > while an owning AgentServer is supplied as the runtime target" do
-    test "then the captured episode is submitted through that AgentServer's runtime-targeted Lens ingestion" do
-      runtime_owner = self()
-
-      callback =
-        App.build_lens_flush_callback(
-          runtime_ingest_fn: fn owner, request ->
-            send(self(), {:runtime_ingested, owner, request})
-            :ok
-          end,
-          ingest_fn: fn _request -> flunk("application-compatibility ingestion was used") end
-        )
-
-      assert :ok =
-               callback.(
-                 "operator-one",
-                 "Susu",
-                 "Eli",
-                 "observations",
-                 [[Gralkor.Message.new("user", "Remember this")]],
-                 "ingestion-one",
-                 runtime_owner
-               )
-
-      assert_receive {:runtime_ingested, ^runtime_owner,
-                      %Gralkor.Ingest{lens: "observations", content: "Eli: Remember this"}}
-    end
-  end
-
-  describe "when a Lens capture flush runs > while no runtime target is supplied" do
-    test "then the captured episode is submitted through application-compatibility Lens ingestion" do
-      callback =
-        App.build_lens_flush_callback(
-          ingest_fn: fn request ->
-            send(self(), {:compatibility_ingested, request})
-            :ok
-          end,
-          runtime_ingest_fn: fn _owner, _request ->
-            flunk("runtime-targeted ingestion was used")
-          end
-        )
-
-      assert :ok =
-               callback.(
-                 "operator-one",
-                 "Susu",
-                 "Eli",
-                 "observations",
-                 [[Gralkor.Message.new("user", "Remember this")]],
-                 "ingestion-one",
-                 nil
-               )
-
-      assert_receive {:compatibility_ingested,
-                      %Gralkor.Ingest{lens: "observations", content: "Eli: Remember this"}}
-    end
-  end
-
   describe "when the application starts > while the in-memory client is configured" do
     test "then no children are supervised regardless of configured local or remote storage" do
       System.put_env("GRALKOR_DATA_DIR", System.tmp_dir!())
@@ -322,269 +167,6 @@ defmodule Gralkor.ApplicationTest do
       Application.put_env(:jido_gralkor, :client, Gralkor.Client.InMemory)
 
       assert [] = App.children()
-    end
-  end
-
-  describe "when a legacy or Lens capture flush renders an empty transcript" do
-    @tag :capture_log
-    test "then no legacy episode write or Lens ingestion is submitted" do
-      add_episode_fn = fn _g, _b, _s, _o, _opts -> flunk("add_episode should not be called") end
-
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: add_episode_fn
-        )
-
-      logs =
-        ExUnit.CaptureLog.capture_log([level: :debug], fn ->
-          assert :ok = cb.("g", "TestAgent", "Eli", nil, [])
-        end)
-
-      refute logs =~ "[gralkor] capture flushed"
-      refute logs =~ "[gralkor] [test] capture flush body"
-
-      lens_cb =
-        App.build_lens_flush_callback(
-          ingest_fn: fn _request -> flunk("Lens ingestion should not be called") end
-        )
-
-      assert :ok =
-               lens_cb.(
-                 "operator",
-                 "TestAgent",
-                 "Eli",
-                 "observations",
-                 [],
-                 "ingestion",
-                 nil
-               )
-    end
-
-    test "and the flush reports success" do
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o, _opts ->
-            flunk("add_episode should not be called")
-          end
-        )
-
-      assert :ok = cb.("g", "TestAgent", "Eli", nil, [])
-
-      lens_cb =
-        App.build_lens_flush_callback(
-          ingest_fn: fn _request -> flunk("Lens ingestion should not be called") end
-        )
-
-      assert :ok =
-               lens_cb.(
-                 "operator",
-                 "TestAgent",
-                 "Eli",
-                 "observations",
-                 [],
-                 "ingestion",
-                 nil
-               )
-    end
-  end
-
-  describe "when a capture flush runs" do
-    test "then the transcript episode is rendered from the user and assistant text of every captured turn only, with no agent reasoning and no inference call",
-         %{recording_add: add, turn: turn} do
-      cb = App.build_flush_callback(nil, add_episode_fn: add)
-
-      assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
-      assert_receive {:add, "g1", body, "captured", nil}
-      assert body =~ "Eli: Q"
-      assert body =~ "Susu: A"
-      refute body =~ "thinking"
-    end
-
-    test "and the rendered transcript is written as a captured episode", %{
-      recording_add: add,
-      turn: turn
-    } do
-      cb = App.build_flush_callback(nil, add_episode_fn: add)
-
-      assert :ok = cb.("g1", "Susu", "Eli", :ont, [turn])
-      assert_receive {:add, "g1", "Eli: Q\nSusu: A", "captured", :ont}
-    end
-
-    test "and storage-owned direct writer provenance is recorded without a Lens", %{turn: turn} do
-      test_pid = self()
-
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: fn _group, _body, _source, _ontology, opts ->
-            send(test_pid, {:capture_opts, opts})
-            :ok
-          end
-        )
-
-      assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
-      assert_receive {:capture_opts, opts}
-      assert opts[:writer] == :direct
-      refute Keyword.has_key?(opts, :lens)
-    end
-  end
-
-  describe "when a capture flush writes its captured episode successfully" do
-    @tag :capture_log
-    test "then a single line reporting the group, the transcript size, and the duration is logged" do
-      add_episode_fn = fn _g, _b, _s, _o, _opts -> :ok end
-
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: add_episode_fn
-        )
-
-      turns = [[Gralkor.Message.new("user", "hi"), Gralkor.Message.new("assistant", "hello")]]
-
-      logs =
-        ExUnit.CaptureLog.capture_log([level: :info], fn ->
-          assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
-        end)
-
-      assert logs =~ "[gralkor] capture flushed"
-      assert logs =~ "group:g1"
-      assert logs =~ ~r/bodyChars:\d+/
-      assert logs =~ ~r/\d+ms/
-    end
-
-    @tag :capture_log
-    test "and the flush reports success" do
-      cb = App.build_flush_callback(nil, add_episode_fn: fn _g, _b, _s, _o, _opts -> :ok end)
-      turns = [[Gralkor.Message.new("user", "hi")]]
-
-      logs =
-        ExUnit.CaptureLog.capture_log([level: :info], fn ->
-          assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
-        end)
-
-      assert logs =~ "[gralkor] capture flushed"
-      assert logs =~ "group:g1"
-      refute logs =~ "capture flush failed"
-    end
-  end
-
-  describe "when a capture flush writes its captured episode successfully > where test mode is enabled" do
-    setup do
-      Application.put_env(:jido_gralkor, :test, true)
-      on_exit(fn -> Application.delete_env(:jido_gralkor, :test) end)
-      :ok
-    end
-
-    @tag :capture_log
-    test "then the rendered transcript itself is logged, so what actually landed in memory is readable from the logs" do
-      add_episode_fn = fn _g, _b, _s, _o, _opts -> :ok end
-
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: add_episode_fn
-        )
-
-      turns = [[Gralkor.Message.new("user", "hi"), Gralkor.Message.new("assistant", "hello")]]
-
-      logs =
-        ExUnit.CaptureLog.capture_log(fn ->
-          assert :ok = cb.("g1", "TestAgent", "Eli", nil, turns)
-        end)
-
-      assert logs =~ "[gralkor] [test] capture flush body:"
-      assert logs =~ "Eli: hi"
-
-      Application.delete_env(:jido_gralkor, :test)
-
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o, _opts -> :ok end
-        )
-
-      disabled_turns = [[Gralkor.Message.new("user", "hi")]]
-
-      disabled_logs =
-        ExUnit.CaptureLog.capture_log(fn ->
-          assert :ok = cb.("g1", "TestAgent", "Eli", nil, disabled_turns)
-        end)
-
-      refute disabled_logs =~ "[gralkor] [test]"
-    end
-  end
-
-  describe "if writing the captured episode fails" do
-    @tag :capture_log
-    test "then no success line is logged, so a failed attempt is never recorded as a success" do
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o, _opts ->
-            {:error, {:python, "ConnectionError: reset by peer"}}
-          end
-        )
-
-      turns = [[Gralkor.Message.new("user", "hi")]]
-
-      logs =
-        ExUnit.CaptureLog.capture_log([level: :info], fn ->
-          assert {:error, {:python, "ConnectionError: reset by peer"}} =
-                   cb.("g1", "TestAgent", "Eli", nil, turns)
-        end)
-
-      refute logs =~ "[gralkor] capture flushed"
-      assert logs =~ "[gralkor] capture flush failed"
-      assert logs =~ "group:g1"
-    end
-
-    @tag :capture_log
-    test "and a concise warning naming the group and the reason is logged" do
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o, _opts -> {:error, :disk_full} end
-        )
-
-      turns = [[Gralkor.Message.new("user", "hi")]]
-
-      logs =
-        ExUnit.CaptureLog.capture_log([level: :warning], fn ->
-          assert {:error, :disk_full} = cb.("g1", "TestAgent", "Eli", nil, turns)
-        end)
-
-      flush_line =
-        logs
-        |> String.split("\n")
-        |> Enum.find("", &String.contains?(&1, "capture flush failed"))
-
-      assert flush_line =~ ~r/\[gralkor\] capture flush failed — group:g1 :disk_full$/
-    end
-
-    @tag :capture_log
-    test "and the failure is returned unchanged, so the capture buffer owns retry and backoff" do
-      cb =
-        App.build_flush_callback(nil,
-          add_episode_fn: fn _g, _b, _s, _o, _opts ->
-            {:error, {:python, "ConnectionError: reset by peer"}}
-          end
-        )
-
-      turns = [[Gralkor.Message.new("user", "hi")]]
-
-      assert {:error, {:python, "ConnectionError: reset by peer"}} =
-               cb.("g1", "TestAgent", "Eli", nil, turns)
-    end
-  end
-
-  describe "when a capture flush is retried after its captured episode has already been written" do
-    test "then that captured episode is written a second time, because episode writes are not idempotent",
-         %{
-           recording_add: add,
-           turn: turn
-         } do
-      cb = App.build_flush_callback(nil, add_episode_fn: add)
-
-      assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
-      assert :ok = cb.("g1", "Susu", "Eli", nil, [turn])
-
-      assert_receive {:add, "g1", body, "captured", nil}
-      assert_receive {:add, "g1", ^body, "captured", nil}
     end
   end
 

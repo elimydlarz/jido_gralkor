@@ -2,9 +2,8 @@ defmodule JidoGralkor.Actions.MemoryAdd do
   @moduledoc """
   ReAct tool the LLM can call to store a thought or decision in memory.
 
-  Conversations are already captured automatically via the capture hook
-  in `JidoGralkor.Plugin`; this tool is for higher-level insights the
-  agent wants to preserve explicitly.
+  This tool is for higher-level insights the agent wants to preserve
+  explicitly.
 
   Fire-and-forget: the in-process Gralkor write is spawned in a background
   `Task` and the action returns immediately. The write invokes Graphiti's

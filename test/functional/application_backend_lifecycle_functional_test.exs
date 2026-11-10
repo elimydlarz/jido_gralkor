@@ -2,10 +2,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
   use ExUnit.Case, async: false
 
   alias Gralkor.Application, as: GralkorApplication
-  alias Gralkor.CaptureBuffer
-  alias Gralkor.Client
   alias Gralkor.GraphitiPool
-  alias Gralkor.Message
 
   @moduletag :functional
   @moduletag timeout: 120_000
@@ -44,112 +41,6 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
       assert :sys.get_state(pool).falkordb_spec == {:remote, [host: "memory.example", port: 6379]}
       assert_received {:falkor_db_constructed, {:remote, [host: "memory.example", port: 6379]}}
       assert :sys.get_state(pool).falkor_db == :remote_falkor_db
-    end
-
-    test "and application compatibility capture does not require an owning agent runtime" do
-      Application.put_env(:jido_gralkor, :falkordb, host: "memory.example", port: 6379)
-      Application.put_env(:jido_gralkor, :reflections, :invalid_if_resolved)
-      Application.put_env(:jido_gralkor, :destinations, [[name: "observations"]])
-
-      Application.put_env(:jido_gralkor, :lenses, [
-        [
-          name: "observations",
-          destination: "observations",
-          ingestion: Gralkor.Lens.Ingestion.Store
-        ]
-      ])
-
-      Application.put_env(
-        :jido_gralkor,
-        :lens_storage,
-        Gralkor.Lens.Storage.InMemory
-      )
-
-      start_supervised!(Gralkor.Lens.Storage.InMemory)
-
-      assert [
-               {Gralkor.Python, _python_options},
-               {GraphitiPool, _pool_options},
-               {CaptureBuffer, capture_options}
-             ] = GralkorApplication.children()
-
-      start_supervised!({CaptureBuffer, capture_options})
-
-      assert :ok =
-               CaptureBuffer.append_lens(
-                 "reflection-free-capture",
-                 "operator-one",
-                 "Susu",
-                 "Eli",
-                 "observations",
-                 [Message.new("user", "captured without Reflection scheduling")]
-               )
-
-      assert :ok = CaptureBuffer.flush_and_await("reflection-free-capture", 1_000)
-
-      assert [%{lens: "observations"}] =
-               Gralkor.Lens.Storage.InMemory.episodes("observations")
-    end
-
-    test "and buffered Lens capture flushes without resolving or invoking configured Reflections" do
-      Application.put_env(:jido_gralkor, :falkordb, host: "memory.example", port: 6379)
-      Application.put_env(:jido_gralkor, :lens_storage, Gralkor.Lens.Storage.InMemory)
-      start_supervised!(Gralkor.Lens.Storage.InMemory)
-      test_pid = self()
-
-      start_supervised!(
-        {JidoGralkor.Runtime,
-         owner: test_pid,
-         configuration: %{
-           destinations: [%{name: "observations"}],
-           lenses: [
-             %{
-               name: "observations",
-               destination: "observations",
-               ingestion: Gralkor.Lens.Ingestion.Store
-             }
-           ],
-           reflections: [
-             %{
-               name: "review",
-               chain_of_thought: %{
-                 steps: [
-                   %{label: "review", directions: "Review", output: %{"summary" => "string"}}
-                 ]
-               },
-               outputs: [%{kind: :destination, destination: "observations"}]
-             }
-           ]
-         },
-         run_reflection: fn reflection, invocation, _opts ->
-           send(test_pid, {:reflection_run, reflection.name, invocation})
-           {:error, :unexpected_reflection}
-         end,
-         deliver_artefact: fn _output, reflection_name, _operator_id, _artefact ->
-           send(test_pid, {:reflection_delivered, reflection_name})
-           :ok
-         end}
-      )
-
-      assert [{Gralkor.Python, _}, {GraphitiPool, _}, {CaptureBuffer, capture_options}] =
-               GralkorApplication.children()
-
-      start_supervised!({CaptureBuffer, capture_options})
-
-      assert :ok =
-               Client.capture(test_pid, %Gralkor.Capture{
-                 session_id: "reflection-free-capture",
-                 operator_id: "operator-one",
-                 agent_name: "Susu",
-                 user_name: "Eli",
-                 messages: [Message.new("user", "captured without Reflection scheduling")],
-                 route: {:lenses, ["observations"]}
-               })
-
-      assert :ok = CaptureBuffer.flush_and_await("reflection-free-capture", 1_000)
-      assert [%{lens: "observations"}] = Gralkor.Lens.Storage.InMemory.episodes("observations")
-      refute_receive {:reflection_run, _name, _invocation}, 100
-      refute_received {:reflection_delivered, _name}
     end
   end
 
@@ -227,8 +118,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
 
     assert [
              {Gralkor.Python, [reap_orphans: false]} = python,
-             {GraphitiPool, pool_options},
-             {Gralkor.CaptureBuffer, _capture_options} = capture
+             {GraphitiPool, pool_options}
            ] = GralkorApplication.children()
 
     pool_options =
@@ -250,17 +140,16 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
         id: :remote_application_children,
         start:
           {Supervisor, :start_link,
-           [[python, {GraphitiPool, pool_options}, capture], [strategy: :one_for_one]]},
+           [[python, {GraphitiPool, pool_options}], [strategy: :one_for_one]]},
         type: :supervisor
       })
 
     assert [
-             {CaptureBuffer, capture_pid, :worker, _},
              {GraphitiPool, pool, :worker, _},
              {Gralkor.Python, python_pid, :worker, _}
            ] = Supervisor.which_children(supervisor)
 
-    assert Enum.all?([capture_pid, pool, python_pid], &Process.alive?/1)
+    assert Enum.all?([pool, python_pid], &Process.alive?/1)
 
     %{pool: pool}
   end
@@ -269,7 +158,7 @@ defmodule Gralkor.ApplicationBackendLifecycleFunctionalTest do
     data_dir = unique_data_dir()
     System.put_env("GRALKOR_DATA_DIR", data_dir)
 
-    assert [{Gralkor.Python, [reap_orphans: true]}, {GraphitiPool, pool_options}, _capture] =
+    assert [{Gralkor.Python, [reap_orphans: true]}, {GraphitiPool, pool_options}] =
              GralkorApplication.children()
 
     assert Keyword.fetch!(pool_options, :falkordb_spec) == {:embedded, Path.expand(data_dir)}

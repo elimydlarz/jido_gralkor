@@ -2,8 +2,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
   @moduledoc """
   Where each failure class is retried, proved at the seams Gralkor owns.
 
-  Gralkor does not retry returned upstream failures. The capture buffer is the
-  one layer that retries a raised write, and a call outside a capture chain
+  Gralkor does not retry returned upstream failures, and a direct graph write
   gets exactly one attempt.
 
   Reifies the `retry-ownership` tree.
@@ -13,11 +12,9 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
 
   import ExUnit.CaptureLog
 
-  alias Gralkor.CaptureBuffer
   alias Gralkor.Client
   alias Gralkor.Client.Native
   alias Gralkor.GraphitiPool
-  alias Gralkor.Message
   alias JidoGralkor.Runtime
 
   @moduletag :functional
@@ -31,7 +28,6 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
         {JidoGralkor.Plugin,
          %{
            agent_name: "Retry Ownership Reflection Consumer",
-           capture_destination: "personal",
            runtime_config: %{destinations: [], lenses: [], reflections: []}
          }}
       ]
@@ -302,115 +298,7 @@ defmodule Gralkor.RetryOwnershipFunctionalTest do
     Pythonx.decode(raw)
   end
 
-  defp add_times(g) do
-    {raw, _} = Pythonx.eval("g.add_times", %{"g" => g})
-    Pythonx.decode(raw)
-  end
-
-  defp start_production_capture_chain(add_failures) do
-    %{g: g} = pool = start_pool()
-    Pythonx.eval("g.add_failures = failures", %{"g" => g, "failures" => add_failures})
-
-    start_supervised!(
-      {CaptureBuffer, flush_callback: Gralkor.Application.build_flush_callback(nil)}
-    )
-
-    pool
-  end
-
-  defp start_upstream_failing_capture_chain(upstream_failure) do
-    %{g: g} = pool = start_pool()
-    Pythonx.eval("g.upstream_failure = failure", %{"g" => g, "failure" => upstream_failure})
-
-    start_supervised!(
-      {CaptureBuffer, flush_callback: Gralkor.Application.build_flush_callback(nil)}
-    )
-
-    pool
-  end
-
-  describe "when a capture callback returns an upstream rate-limit failure" do
-    test "then the capture buffer does not retry the returned failure and logs it" do
-      %{g: g} = start_upstream_failing_capture_chain("rate_limit")
-
-      :ok =
-        Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
-          Message.new("user", "x")
-        ])
-
-      logs =
-        capture_log(fn ->
-          assert {:error, {:upstream_llm, {:rate_limited, _detail}}} =
-                   Native.flush_and_await("s1", 5_000)
-        end)
-
-      assert attempts(g, "add") == 1
-      assert logs =~ "capture dropped (upstream error)"
-    end
-  end
-
-  describe "when a capture callback returns another upstream failure" do
-    test "then the capture buffer does not retry it and returns it unchanged" do
-      %{g: g} = start_upstream_failing_capture_chain("provider")
-
-      returned =
-        GraphitiPool.add_episode(GraphitiPool, "g", "x", "captured", nil,
-          source_kind: :conversation,
-          writer: :direct
-        )
-
-      assert {:error, {:upstream_llm, {:provider, detail}}} = returned
-      assert detail =~ "API key not valid"
-
-      :ok =
-        Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
-          Message.new("user", "x")
-        ])
-
-      capture_log(fn ->
-        assert Native.flush_and_await("s1", 5_000) == returned
-      end)
-
-      assert attempts(g, "add") == 2
-    end
-  end
-
-  describe "when a graph write raises inside a capture chain" do
-    test "then the capture buffer retries with its default one-second and two-second backoffs" do
-      %{g: g} = start_production_capture_chain(2)
-
-      :ok =
-        Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
-          Message.new("user", "x")
-        ])
-
-      capture_log(fn ->
-        assert :ok = Native.flush_and_await("s1", 10_000)
-      end)
-
-      assert attempts(g, "add") == 3
-      [first, second, third] = add_times(g)
-      assert second - first >= 0.9
-      assert third - second >= 1.9
-    end
-
-    test "and a returned write failure is not retried by a second layer" do
-      %{g: g} = start_production_capture_chain(1)
-
-      :ok =
-        Gralkor.CaptureFixture.capture(Native, "s1", "g", "Susu", "Eli", [
-          Message.new("user", "x")
-        ])
-
-      capture_log(fn ->
-        assert :ok = Native.flush_and_await("s1", 10_000)
-      end)
-
-      assert attempts(g, "add") == 2
-    end
-  end
-
-  describe "when a graph write fails outside a capture chain" do
+  describe "when a direct graph write fails" do
     test "then the direct caller receives the failure after one attempt" do
       %{g: g} = start_pool()
 

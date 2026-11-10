@@ -18,7 +18,7 @@ defmodule Gralkor.Destination do
 
   @doc """
   Names of packaged Destinations only their packaged Reflection writes to:
-  consumer Lenses, consumer Reflections, and capture cannot target them.
+  consumer Lenses and consumer Reflections cannot target them.
   """
   @spec exclusive_names() :: [String.t()]
   def exclusive_names, do: @exclusive_names

@@ -2,10 +2,7 @@ defmodule JidoGralkor.PluginTest do
   use ExUnit.Case, async: false
   @moduletag :integration
 
-  import ExUnit.CaptureLog
-
   alias Gralkor.Client.InMemory
-  alias Gralkor.Message
   alias Jido.Signal
   alias JidoGralkor.Plugin
 
@@ -29,11 +26,10 @@ defmodule JidoGralkor.PluginTest do
       name: "plugin_test_server_agent",
       default_plugins: %{__memory__: false},
       plugins: [
-        {JidoGralkor.Plugin, %{agent_name: "Susu", capture_destination: "personal"}}
+        {JidoGralkor.Plugin, %{agent_name: "Susu"}}
       ],
       signal_routes: [
-        {"ai.react.query", RecordToolContext},
-        {"ai.request.completed", RecordToolContext}
+        {"ai.react.query", RecordToolContext}
       ]
   end
 
@@ -58,15 +54,12 @@ defmodule JidoGralkor.PluginTest do
     request_traces = Keyword.get(opts, :request_traces, %{})
     requests = Keyword.get(opts, :requests, %{})
     agent_name = Keyword.get(opts, :agent_name, "TestAgent")
-    user_name = Keyword.get(opts, :user_name, "Eli")
-    capture_destination = Keyword.get(opts, :capture_destination, "personal")
 
     state =
       %{
         __strategy__: %{request_traces: request_traces, config: %{}},
         requests: requests,
-        __memory__: %{agent_name: agent_name, capture_destination: capture_destination},
-        user_name: user_name
+        __memory__: %{agent_name: agent_name}
       }
       |> maybe_put(:__thread__, if(thread_id, do: %{id: thread_id}, else: nil))
 
@@ -182,7 +175,6 @@ defmodule JidoGralkor.PluginTest do
     test "then it returns plugin state carrying that agent name" do
       assert {:ok, %{agent_name: "Susu"}} =
                Plugin.mount(%{id: "user-1", state: %{}},
-                 capture_destination: "personal",
                  agent_name: "Susu"
                )
     end
@@ -200,25 +192,6 @@ defmodule JidoGralkor.PluginTest do
     test "then it raises ArgumentError" do
       assert_raise ArgumentError, fn ->
         Plugin.mount(%{id: "user-1", state: %{}}, agent_name: "  ")
-      end
-    end
-  end
-
-  describe "if mount's capture Destination is missing, unregistered, retired, or the packaged `generalisations` Destination" do
-    test "then it raises an ArgumentError identifying the rejected capture Destination" do
-      for {capture_destination, rejected} <- [
-            {nil, ~r/capture_destination nil/},
-            {"nowhere", ~r/"nowhere"/},
-            {"operator", ~r/"operator" was retired/},
-            {"generalisations", ~r/"generalisations"/}
-          ] do
-        assert_raise ArgumentError, rejected, fn ->
-          Plugin.mount(%{id: "operator-one", state: %{}},
-            capture_destination: capture_destination,
-            agent_name: "Susu",
-            runtime_config: runtime_configuration()
-          )
-        end
       end
     end
   end
@@ -241,7 +214,6 @@ defmodule JidoGralkor.PluginTest do
                    ~r/invalid Gralkor runtime configuration.*"stray".*"absent"/,
                    fn ->
                      Plugin.mount(%{id: "operator-one", state: %{}},
-                       capture_destination: "personal",
                        agent_name: "Susu",
                        runtime_config: invalid
                      )
@@ -255,12 +227,10 @@ defmodule JidoGralkor.PluginTest do
 
       assert {:ok,
               %{
-                capture_destination: "personal",
                 agent_name: "Susu",
                 ingestion_lens: "observations"
               }} =
                Plugin.mount(%{id: "operator-one", state: %{}},
-                 capture_destination: "personal",
                  agent_name: "Susu",
                  ingestion_lens: "observations",
                  runtime_config: runtime_configuration()
@@ -272,12 +242,10 @@ defmodule JidoGralkor.PluginTest do
     test "then mounting accepts the Lens" do
       assert {:ok,
               %{
-                capture_destination: "personal",
                 agent_name: "Susu",
                 ingestion_lens: "personal-chat"
               }} =
                Plugin.mount(%{id: "operator-one", state: %{}},
-                 capture_destination: "personal",
                  agent_name: "Susu",
                  ingestion_lens: "personal-chat"
                )
@@ -288,12 +256,10 @@ defmodule JidoGralkor.PluginTest do
     test "then mounting accepts the Lens" do
       assert {:ok,
               %{
-                capture_destination: "personal",
                 agent_name: "Susu",
                 ingestion_lens: "observations"
               }} =
                Plugin.mount(%{id: "operator-one", state: %{}},
-                 capture_destination: "personal",
                  agent_name: "Susu",
                  ingestion_lens: "observations",
                  runtime_config: runtime_configuration()
@@ -307,7 +273,6 @@ defmodule JidoGralkor.PluginTest do
 
       assert_raise ArgumentError, ~r/unknown Lens "missing"/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
-          capture_destination: "personal",
           agent_name: "Susu",
           ingestion_lens: "missing"
         )
@@ -320,7 +285,6 @@ defmodule JidoGralkor.PluginTest do
       for retired <- ["operator", "default"] do
         assert_raise ArgumentError, ~r/"#{retired}" was retired.*"personal-chat"/, fn ->
           Plugin.mount(%{id: "operator-one", state: %{}},
-            capture_destination: "personal",
             agent_name: "Susu",
             ingestion_lens: retired
           )
@@ -335,7 +299,6 @@ defmodule JidoGralkor.PluginTest do
 
       assert_raise ArgumentError, ~r/unknown Lens "observations"/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
-          capture_destination: "personal",
           agent_name: "Susu",
           ingestion_lens: "observations"
         )
@@ -349,7 +312,6 @@ defmodule JidoGralkor.PluginTest do
 
       assert_raise ArgumentError, ~r/default_lens.*ingestion_lens/, fn ->
         Plugin.mount(%{id: "operator-one", state: %{}},
-          capture_destination: "personal",
           agent_name: "Susu",
           default_lens: "observations"
         )
@@ -363,11 +325,28 @@ defmodule JidoGralkor.PluginTest do
                    ~r/search_destinations.*MemorySearch.*per-search.*destinations/,
                    fn ->
                      Plugin.mount(%{id: "operator-one", state: %{}},
-                       capture_destination: "personal",
                        agent_name: "Susu",
                        search_destinations: ["memory"]
                      )
                    end
+    end
+  end
+
+  describe "if mount receives the removed `capture_destination` option" do
+    test "then mounting raises an ArgumentError saying capture was removed in 18.0.0 and directing the consumer to remember its own chat record with `Gralkor.Client.ingest/2` through a Lens" do
+      for capture_destination <- ["personal", nil] do
+        error =
+          assert_raise ArgumentError, fn ->
+            Plugin.mount(%{id: "operator-one", state: %{}},
+              agent_name: "Susu",
+              capture_destination: capture_destination
+            )
+          end
+
+        assert Exception.message(error) =~ "capture was removed in 18.0.0"
+        assert Exception.message(error) =~ "own chat record"
+        assert Exception.message(error) =~ "Gralkor.Client.ingest/2 through a Lens"
+      end
     end
   end
 
@@ -440,7 +419,7 @@ defmodule JidoGralkor.PluginTest do
   end
 
   describe "when an agent turn begins > while a thread has committed to agent state > where the incoming tool context selects a Lens" do
-    test "then the selected Lens is validated and retained on the request-correlated thread entry" do
+    test "then the selected Lens is validated and kept on the tool context" do
       plugin_state = lens_plugin_state()
 
       signal =
@@ -454,59 +433,8 @@ defmodule JidoGralkor.PluginTest do
         agent("operator-one", thread_id: "thread-one")
         |> put_in([:state, :__memory__], plugin_state)
 
-      assert {:ok,
-              {:continue, %Signal{data: %{tool_context: %{lens: "notes"}, extra_refs: refs}}}} =
+      assert {:ok, {:continue, %Signal{data: %{tool_context: %{lens: "notes"}}}}} =
                Plugin.handle_signal(signal, context(lens_agent))
-
-      assert refs.jido_gralkor_lens == "notes"
-    end
-
-    test "and the selected Lens remains available to completion and failure capture" do
-      InMemory.set_capture(:ok)
-      plugin_state = lens_plugin_state()
-      request_id = "request-retained-lens"
-
-      signal =
-        Signal.new!(
-          "ai.react.query",
-          %{query: "hi", tool_context: %{lens: "notes"}},
-          source: "/test"
-        )
-
-      query_agent =
-        agent("operator-one", thread_id: "thread-one")
-        |> put_in([:state, :__memory__], plugin_state)
-
-      assert {:ok, {:continue, %{data: %{extra_refs: refs}}}} =
-               Plugin.handle_signal(signal, context(query_agent))
-
-      request_refs = Map.put(refs, :request_id, request_id)
-
-      completion_agent =
-        query_agent
-        |> put_in([:state, :__thread__], %{id: "thread-one", entries: [%{refs: request_refs}]})
-        |> put_in([:state, :__strategy__, :request_traces], %{
-          request_id => %{events: [%{kind: :llm_completed, data: %{}}]}
-        })
-        |> put_in([:state, :requests], %{request_id => %{query: "hi"}})
-
-      completed =
-        Signal.new!("ai.request.completed", %{request_id: request_id, result: "done"},
-          source: "/test"
-        )
-
-      assert {:ok, :continue} = Plugin.handle_signal(completed, context(completion_agent))
-
-      assert [[_, %Gralkor.Capture{route: {:lenses, ["notes"]}}]] = InMemory.captures()
-
-      InMemory.reset()
-      InMemory.set_capture(:ok)
-
-      failed =
-        Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
-
-      assert {:ok, :continue} = Plugin.handle_signal(failed, context(completion_agent))
-      assert [[_, %Gralkor.Capture{route: {:lenses, ["notes"]}}]] = InMemory.captures()
     end
   end
 
@@ -535,10 +463,8 @@ defmodule JidoGralkor.PluginTest do
   end
 
   describe "when an agent turn begins > while a thread has committed to agent state > where the incoming tool context explicitly selects no Lens" do
-    test "then completion and failure capture use direct storage" do
-      InMemory.set_capture(:ok)
+    test "then the tool context keeps that empty Lens selection" do
       plugin_state = lens_plugin_state()
-      request_id = "request-direct"
 
       signal =
         Signal.new!(
@@ -551,35 +477,10 @@ defmodule JidoGralkor.PluginTest do
         agent("operator-one", thread_id: "thread-one")
         |> put_in([:state, :__memory__], plugin_state)
 
-      assert {:ok, {:continue, %{data: %{extra_refs: refs}}}} =
+      assert {:ok, {:continue, %Signal{data: %{tool_context: tool_context}}}} =
                Plugin.handle_signal(signal, context(query_agent))
 
-      completion_agent =
-        query_agent
-        |> put_in([:state, :__thread__], %{
-          id: "thread-one",
-          entries: [%{refs: Map.put(refs, :request_id, request_id)}]
-        })
-        |> put_in([:state, :__strategy__, :request_traces], %{
-          request_id => %{events: [%{kind: :llm_completed, data: %{}}]}
-        })
-        |> put_in([:state, :requests], %{request_id => %{query: "hi"}})
-
-      completed =
-        Signal.new!("ai.request.completed", %{request_id: request_id, result: "done"},
-          source: "/test"
-        )
-
-      failed =
-        Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
-
-      assert {:ok, :continue} = Plugin.handle_signal(completed, context(completion_agent))
-      assert {:ok, :continue} = Plugin.handle_signal(failed, context(completion_agent))
-
-      assert [
-               [_, %Gralkor.Capture{route: {:direct, "personal"}}],
-               [_, %Gralkor.Capture{route: {:direct, "personal"}}]
-             ] = InMemory.captures()
+      assert Map.fetch(tool_context, :lens) == {:ok, nil}
     end
   end
 
@@ -645,308 +546,12 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  describe "when an agent turn completes > while a thread has committed to agent state" do
-    test "then the turn is sent for capture as canonical messages under that thread's session id" do
-      InMemory.set_capture(:ok)
-      request_id = "req-server"
-      pid = start_server_agent("server-operator-completion")
-
-      :sys.replace_state(pid, fn server_state ->
-        update_in(server_state.agent.state, fn agent_state ->
-          agent_state
-          |> Map.put(:__thread__, Jido.Thread.new(id: "thr-42"))
-          |> Map.put(:user_name, "Eli")
-          |> Map.put(:__strategy__, %{
-            request_traces: %{
-              request_id => %{events: [%{kind: :llm_completed, data: %{text: "thinking"}}]}
-            }
-          })
-          |> Map.put(:requests, %{request_id => %{query: "what did I say?"}})
-        end)
-      end)
-
-      signal =
-        Signal.new!("ai.request.completed", %{request_id: request_id, result: "you said hi"},
-          source: "/test"
-        )
-
-      assert {:ok, _agent} = Jido.AgentServer.call(pid, signal)
-
-      assert [[^pid, %Gralkor.Capture{session_id: "thr-42", messages: messages}]] =
-               InMemory.captures()
-
-      assert Enum.all?(messages, &match?(%Message{}, &1))
-    end
-
-    test "and capture selects the mounted capture Destination for the unchanged operator identity" do
-      %Gralkor.Capture{operator_id: operator_id, route: route} =
-        completed_capture(capture_destination: "memory")
-
-      assert operator_id == "user-42"
-      assert route == {:direct, "memory"}
-    end
-
-    test "and the user name held in agent state is forwarded with the capture" do
-      %Gralkor.Capture{user_name: user_name} = completed_capture()
-      assert user_name == "Eli"
-    end
-
-    test "and the user's query opens the captured messages" do
-      %Gralkor.Capture{messages: messages} = completed_capture()
-      assert hd(messages) == %Message{role: "user", content: "what did I say?"}
-    end
-
-    test "and the completed answer closes them" do
-      %Gralkor.Capture{messages: messages} = completed_capture()
-      assert List.last(messages) == %Message{role: "assistant", content: "you said hi"}
-    end
-  end
-
-  describe "when an agent turn completes > while a thread has committed to agent state > while the completed turn's request trace holds no events" do
-    test "then no capture is sent at all" do
-      InMemory.set_capture(:ok)
-      request_id = "req-empty"
-
-      ag =
-        agent("user-01",
-          thread_id: "thr-empty",
-          request_traces: %{request_id => %{events: [], truncated?: false}},
-          requests: %{request_id => %{query: "q", status: :pending, result: nil}}
-        )
-
-      signal =
-        Signal.new!("ai.request.completed", %{request_id: request_id, result: "a"},
-          source: "/test"
-        )
-
-      Plugin.handle_signal(signal, context(ag))
-
-      assert InMemory.captures() == []
-    end
-  end
-
-  describe "when an agent turn completes > while a thread has committed to agent state > where the plugin was mounted with Lens selections" do
-    test "then the capture carries the selected Lens" do
-      assert [
-               [
-                 _,
-                 %Gralkor.Capture{
-                   session_id: "thread-one",
-                   operator_id: "operator-one",
-                   agent_name: "Susu",
-                   user_name: "Eli",
-                   route: {:lenses, ["observations"]}
-                 }
-               ]
-             ] = lens_capture()
-    end
-  end
-
-  describe "when an agent turn completes > while a thread has committed to agent state > if the completed result is not text" do
-    test "then nothing is captured" do
-      InMemory.set_capture(:ok)
-      request_id = "req-structured"
-
-      ag =
-        agent("user-42",
-          thread_id: "thr-42",
-          request_traces: %{
-            request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
-          },
-          requests: %{request_id => %{query: "hi", status: :pending, result: nil}}
-        )
-
-      signal =
-        Signal.new!(
-          "ai.request.completed",
-          %{request_id: request_id, result: %{text: "structured"}},
-          source: "/test"
-        )
-
-      assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
-      assert InMemory.captures() == []
-    end
-  end
-
-  describe "when an agent turn completes > while a thread has committed to agent state > if agent state holds no user name" do
-    test "then the callback raises ArgumentError naming the missing user name" do
-      InMemory.set_capture(:ok)
-      request_id = "req-no-user"
-
-      ag = %{
-        id: "user-42",
-        state: %{
-          __strategy__: %{
-            request_traces: %{
-              request_id => %{
-                events: [%{kind: :llm_completed, data: %{}}],
-                truncated?: false
-              }
-            }
-          },
-          requests: %{request_id => %{query: "hi", status: :pending, result: nil}},
-          __memory__: %{agent_name: "TestAgent", capture_destination: "personal"},
-          __thread__: %{id: "thr-42"}
-        }
-      }
-
-      signal =
-        Signal.new!(
-          "ai.request.completed",
-          %{request_id: request_id, result: "yo"},
-          source: "/test"
-        )
-
-      assert_raise ArgumentError, ~r/user_name/, fn ->
-        Plugin.handle_signal(signal, context(ag))
-      end
-    end
-  end
-
-  describe "when an agent turn completes > while a thread has committed to agent state > if agent state holds a blank user name" do
-    test "then the callback raises ArgumentError naming the missing user name" do
-      InMemory.set_capture(:ok)
-      request_id = "req-blank-user"
-
-      ag =
-        agent("user-42",
-          user_name: "   ",
-          thread_id: "thr-42",
-          request_traces: %{
-            request_id => %{
-              events: [%{kind: :llm_completed, data: %{}}],
-              truncated?: false
-            }
-          },
-          requests: %{request_id => %{query: "hi", status: :pending, result: nil}}
-        )
-
-      signal =
-        Signal.new!(
-          "ai.request.completed",
-          %{request_id: request_id, result: "yo"},
-          source: "/test"
-        )
-
-      assert_raise ArgumentError, ~r/user_name/, fn ->
-        Plugin.handle_signal(signal, context(ag))
-      end
-    end
-  end
-
-  describe "when an agent turn completes > while a thread has committed to agent state > if the capture call fails" do
-    test "then the callback raises, reporting the capture failure" do
-      InMemory.set_capture({:error, :gralkor_unreachable})
-      request_id = "req-err"
-
-      ag =
-        agent("user-01",
-          thread_id: "thr-err",
-          request_traces: %{
-            request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
-          },
-          requests: %{request_id => %{query: "q", status: :pending, result: nil}}
-        )
-
-      signal =
-        Signal.new!("ai.request.completed", %{request_id: request_id, result: "a"},
-          source: "/test"
-        )
-
-      assert_raise RuntimeError, ~r/Gralkor capture failed.*gralkor_unreachable/, fn ->
-        Plugin.handle_signal(signal, context(ag))
-      end
-    end
-  end
-
-  describe "when an agent turn completes > while no thread has committed to agent state" do
-    test "then capture is skipped" do
-      {_log, captures} = completed_without_thread()
-      assert captures == []
-    end
-
-    test "and a warning naming the operator is logged" do
-      {log, _captures} = completed_without_thread()
-      assert log =~ "user-01"
-    end
-  end
-
-  describe "when an agent turn fails > while a thread has committed to agent state" do
-    test "then the turn is captured with the failure surfaced as a terminal `request failed: …` behaviour message" do
-      %Gralkor.Capture{messages: messages} = failed_capture()
-
-      assert List.last(messages) == %Message{
-               role: "behaviour",
-               content: "request failed: :boom"
-             }
-    end
-
-    test "and no assistant message is captured for the failed turn" do
-      %Gralkor.Capture{messages: messages} = failed_capture()
-      refute Enum.any?(messages, &(&1.role == "assistant"))
-    end
-
-    test "and the user's original query is captured ahead of the failure message" do
-      %Gralkor.Capture{messages: messages} = failed_capture()
-      user_msg = Enum.find(messages, &(&1.role == "user"))
-      assert user_msg.content == "original question"
-      assert Enum.find_index(messages, &(&1.role == "user")) < length(messages) - 1
-    end
-  end
-
-  describe "when an agent turn fails > while a thread has committed to agent state > while the failed turn's request trace holds no events" do
-    test "then the user's query and terminal failure are still sent for capture" do
-      InMemory.set_capture(:ok)
-      request_id = "req-empty-failure"
-
-      ag =
-        agent("user-01",
-          thread_id: "thr-fail",
-          request_traces: %{request_id => %{events: [], truncated?: false}},
-          requests: %{
-            request_id => %{query: "original question", status: :pending, result: nil}
-          }
-        )
-
-      signal =
-        Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
-
-      assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
-
-      assert [[_, %Gralkor.Capture{messages: messages}]] = InMemory.captures()
-
-      assert messages == [
-               %Message{role: "user", content: "original question"},
-               %Message{role: "behaviour", content: "request failed: :boom"}
-             ]
-    end
-  end
-
-  describe "when an agent turn fails > while no thread has committed to agent state" do
-    test "then capture is skipped" do
-      {_log, captures} = failed_without_thread()
-      assert captures == []
-    end
-
-    test "and a warning naming the operator is logged" do
-      {log, _captures} = failed_without_thread()
-      assert log =~ "user-01"
-    end
-  end
-
   describe "when a signal of any other type arrives" do
     test "then the plugin lets the signal continue untouched" do
       ag = agent("user-other", thread_id: "thr-other")
       signal = Signal.new!("ai.llm.delta", %{token: "x"}, source: "/test")
 
       assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
-    end
-
-    test "and nothing is captured" do
-      ag = agent("user-other", thread_id: "thr-other")
-      signal = Signal.new!("ai.llm.delta", %{token: "x"}, source: "/test")
-      Plugin.handle_signal(signal, context(ag))
-      assert InMemory.captures() == []
     end
 
     test "and nothing is recalled" do
@@ -976,141 +581,11 @@ defmodule JidoGralkor.PluginTest do
     end
   end
 
-  defp completed_without_thread do
-    InMemory.set_capture(:ok)
-    request_id = "req-first-complete"
-
-    ag =
-      agent("user-01",
-        thread_id: nil,
-        request_traces: %{
-          request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
-        },
-        requests: %{request_id => %{query: "q", status: :pending, result: nil}}
-      )
-
-    signal =
-      Signal.new!("ai.request.completed", %{request_id: request_id, result: "done"},
-        source: "/test"
-      )
-
-    log =
-      capture_log(fn -> assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag)) end)
-
-    {log, InMemory.captures()}
-  end
-
-  defp failed_without_thread do
-    InMemory.set_capture(:ok)
-    request_id = "req-first-fail"
-
-    ag =
-      agent("user-01",
-        thread_id: nil,
-        request_traces: %{
-          request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
-        },
-        requests: %{request_id => %{query: "q", status: :pending, result: nil}}
-      )
-
-    signal =
-      Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
-
-    log =
-      capture_log(fn -> assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag)) end)
-
-    {log, InMemory.captures()}
-  end
-
-  defp completed_capture(opts \\ []) do
-    InMemory.set_capture(:ok)
-    request_id = "req-xyz"
-
-    ag =
-      agent("user-42",
-        capture_destination: Keyword.get(opts, :capture_destination, "personal"),
-        thread_id: "thr-42",
-        request_traces: %{
-          request_id => %{
-            events: [
-              %{kind: :llm_completed, data: %{text: "thinking"}},
-              %{kind: :tool_completed, data: %{tool_name: "memory_search", result: "..."}}
-            ],
-            truncated?: false
-          }
-        },
-        requests: %{
-          request_id => %{query: "what did I say?", status: :pending, result: nil}
-        }
-      )
-
-    signal =
-      Signal.new!("ai.request.completed", %{request_id: request_id, result: "you said hi"},
-        source: "/test"
-      )
-
-    assert {:ok, :continue} = Plugin.handle_signal(signal, context(ag))
-    assert [[_, capture]] = InMemory.captures()
-    capture
-  end
-
-  defp lens_capture do
-    InMemory.set_capture(:ok)
-    plugin_state = lens_plugin_state()
-    request_id = "request-lens-capture"
-
-    lens_agent =
-      agent("operator-one",
-        capture_destination: "personal",
-        agent_name: "Susu",
-        thread_id: "thread-one",
-        request_traces: %{
-          request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
-        },
-        requests: %{request_id => %{query: "Remember this", status: :pending, result: nil}}
-      )
-      |> put_in([:state, :__memory__], plugin_state)
-
-    signal =
-      Signal.new!(
-        "ai.request.completed",
-        %{request_id: request_id, result: "Remembered."},
-        source: "/test"
-      )
-
-    assert {:ok, :continue} = Plugin.handle_signal(signal, context(lens_agent))
-    InMemory.captures()
-  end
-
-  defp failed_capture do
-    InMemory.set_capture(:ok)
-    request_id = "req-fail"
-
-    ag =
-      agent("user-01",
-        thread_id: "thr-fail",
-        request_traces: %{
-          request_id => %{events: [%{kind: :llm_completed, data: %{}}], truncated?: false}
-        },
-        requests: %{
-          request_id => %{query: "original question", status: :pending, result: nil}
-        }
-      )
-
-    signal =
-      Signal.new!("ai.request.failed", %{request_id: request_id, error: :boom}, source: "/test")
-
-    Plugin.handle_signal(signal, context(ag))
-    assert [[_, capture]] = InMemory.captures()
-    capture
-  end
-
   defp lens_plugin_state do
     configure_lenses()
 
     {:ok, plugin_state} =
       Plugin.mount(%{id: "operator-one", state: %{}},
-        capture_destination: "personal",
         agent_name: "Susu",
         ingestion_lens: "observations",
         runtime_config: runtime_configuration()

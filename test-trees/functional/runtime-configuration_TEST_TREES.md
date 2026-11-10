@@ -1,4 +1,4 @@
-Functional: runtime-configuration (src: lib/jido_gralkor/runtime.ex, lib/jido_gralkor/plugin.ex, lib/gralkor/reflection/packaged.ex, lib/gralkor/client.ex, lib/gralkor/capture_buffer.ex, lib/jido_gralkor/actions/memory_search.ex; functional: test/functional/runtime_configuration_functional_test.exs)
+Functional: runtime-configuration (src: lib/jido_gralkor/runtime.ex, lib/jido_gralkor/plugin.ex, lib/gralkor/reflection/packaged.ex, lib/gralkor/client.ex, lib/jido_gralkor/actions/memory_search.ex; functional: test/functional/runtime_configuration_functional_test.exs)
 
 when a consumer starts a Jido agent with the Gralkor plugin
   then the plugin starts one Gralkor runtime under that agent
@@ -53,10 +53,6 @@ when an ontology declares custom entity kinds distinct from `Entity`, `Episodic`
 when named ingestion begins
   then it retains the Lens definition active when ingestion began
   and later named ingestion uses any subsequently installed Lens definition
-
-when a selected-Lens turn is buffered for capture
-  then capture acceptance resolves the Lens through the targeted agent's current runtime-configuration snapshot
-  and its eventual ingestion retains that resolved Lens after the targeted agent terminates
 
 when a named Reflection submission is admitted
   then its background work retains the Reflection definition active at admission

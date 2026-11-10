@@ -79,7 +79,7 @@ defmodule JidoGralkor.MixProject do
   end
 
   defp description do
-    "In-process long-term memory for Jido agents, with automatic turn capture and explicit memory search and ingestion tools."
+    "In-process long-term memory for Jido agents, with explicit memory search and ingestion tools."
   end
 
   defp package do

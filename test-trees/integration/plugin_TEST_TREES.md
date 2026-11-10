@@ -27,9 +27,6 @@ if mount is given no agent name
 if mount is given a blank agent name
   then it raises ArgumentError
 
-if mount's capture Destination is missing, unregistered, retired, or the packaged `generalisations` Destination
-  then it raises an ArgumentError identifying the rejected capture Destination
-
 if mount's runtime configuration is invalid
   then it raises an ArgumentError identifying the invalid configuration
 
@@ -51,6 +48,9 @@ when mount selects an ingestion Lens
 if mount receives the removed `:search_destinations` option
   then mounting raises an ArgumentError identifying MemorySearch's per-search `destinations` selector as its replacement
 
+if mount receives the removed `capture_destination` option
+  then mounting raises an ArgumentError saying capture was removed in 18.0.0 and directing the consumer to remember its own chat record with `Gralkor.Client.ingest/2` through a Lens
+
 when an agent turn begins
   while a thread has committed to agent state
     then the session id planted on the signal's tool context is that committed thread's id rather than one the plugin mints
@@ -60,12 +60,11 @@ when an agent turn begins
     and the user's query is left untouched on the signal
     and unrelated incoming tool-context fields remain alongside fields planted by the plugin
     where the incoming tool context selects a Lens
-      then the selected Lens is validated and retained on the request-correlated thread entry
-      and the selected Lens remains available to completion and failure capture
+      then the selected Lens is validated and kept on the tool context
       if the Lens is unknown or invalid
         then the callback raises identifying the invalid Lens
     where the incoming tool context explicitly selects no Lens
-      then completion and failure capture use direct storage
+      then the tool context keeps that empty Lens selection
   while no thread has committed to agent state
     then the mounted agent name and Gralkor runtime target are planted on the tool context, with no session id
     and no recall is issued on the plugin's own initiative
@@ -75,43 +74,8 @@ when an agent turn begins
     while no thread has committed to agent state
       then the Lens selection is planted on the tool context beside the agent name without a session id
 
-when an agent turn completes
-  while a thread has committed to agent state
-    then the turn is sent for capture as canonical messages under that thread's session id
-    and capture selects the mounted capture Destination for the unchanged operator identity
-    and the user name held in agent state is forwarded with the capture
-    and the user's query opens the captured messages
-    and the completed answer closes them
-    while the completed turn's request trace holds no events
-      then no capture is sent at all
-    where the plugin was mounted with Lens selections
-      then the capture carries the selected Lens
-    if the completed result is not text
-      then nothing is captured
-    if agent state holds no user name
-      then the callback raises ArgumentError naming the missing user name
-    if agent state holds a blank user name
-      then the callback raises ArgumentError naming the missing user name
-    if the capture call fails
-      then the callback raises, reporting the capture failure
-  while no thread has committed to agent state
-    then capture is skipped
-    and a warning naming the operator is logged
-
-when an agent turn fails
-  while a thread has committed to agent state
-    then the turn is captured with the failure surfaced as a terminal `request failed: …` behaviour message
-    and no assistant message is captured for the failed turn
-    and the user's original query is captured ahead of the failure message
-    while the failed turn's request trace holds no events
-      then the user's query and terminal failure are still sent for capture
-  while no thread has committed to agent state
-    then capture is skipped
-    and a warning naming the operator is logged
-
 when a signal of any other type arrives
   then the plugin lets the signal continue untouched
-  and nothing is captured
   and nothing is recalled
 
 if a memory signal hook cannot identify its owning AgentServer

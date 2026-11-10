@@ -8,7 +8,7 @@ when information is submitted through a registered Lens
   and every directly submitted episode retains the selected Lens identity as source provenance
 
 where information is submitted directly without a mounted plugin or conversational turn
-  then the selected Lens's ingestion process runs without requiring an agent response or capture flush
+  then the selected Lens's ingestion process runs without requiring an agent response
   and the caller observes whether ingestion succeeded or failed
   and completed ingestion neither resolves nor invokes configured Reflections
 

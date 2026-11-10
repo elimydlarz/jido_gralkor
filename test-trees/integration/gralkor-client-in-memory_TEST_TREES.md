@@ -1,9 +1,9 @@
 Integration: gralkor-client-in-memory (src: lib/gralkor/client.ex, lib/gralkor/client/in_memory.ex; integration: test/gralkor/client/in_memory_test.exs, test/support/gralkor_client_contract.ex)
 
-when recall, capture, flush-and-await, memory addition, index rebuilding, or community building is called
+when recall, memory addition, index rebuilding, or community building is called
   then the call is recorded with every argument it was given, so a consumer's exact request can be inspected afterwards
 
-if recall, capture, flush-and-await, memory addition, index rebuilding, or community building is called
+if recall, memory addition, index rebuilding, or community building is called
   while no response is configured for it
     then a not-configured error is returned rather than a fabricated success
 
@@ -27,60 +27,9 @@ where a recall is requested with no session id
   if the backend fails
     then that failure is returned unchanged
 
-when a typed direct capture names its session, Destination, operator, agent, and user
-  while its messages have user, assistant or behaviour roles
-    then the request selects direct Destination memory without a caller ontology argument
-  while the backend acknowledges the capture
-    then success is returned
-  if the backend fails
-    then that failure is returned unchanged
-
-where a typed capture selects one or more named Lenses
-  while the backend acknowledges the capture
-    then success is returned
-  if the backend fails
-    then that failure is returned unchanged
-
-if a recall or a capture is requested with a missing or blank agent name
+if a recall is requested with a missing or blank agent name
   then an argument error is raised at the port boundary
   and no backend call is made
-
-if a capture is requested with a missing or blank user name
-  then an argument error is raised at the port boundary
-  and no backend call is made
-
-if a capture is requested with a missing or blank session id
-  then an argument error is raised at the port boundary
-  and no backend call is made
-
-if named-Lens capture is requested with a missing or blank operator identifier
-  then an argument error is raised at the port boundary
-  and no backend call is made
-
-if a flush or flush-and-await is requested with a missing or blank session id
-  then an argument error is raised at the port boundary
-  and no backend call is made
-
-if flush-and-await receives a timeout that is not a positive integer
-  then an argument error is raised
-  and the error identifies the invalid timeout
-  and no backend call is made
-
-when a flush is requested for a session
-  then the call is recorded with its session id
-  and success is returned before the flush completes
-  if the backend fails afterwards
-    then that failure is not observable through the return value
-
-when a flush is requested for a session and awaited with a timeout
-  while the flush completes inside the timeout
-    then success is returned
-    and a later recall for the same group reaches the backend as a separate call
-  while the flush does not complete inside the timeout
-    then a timeout error is returned
-    and a later flush-and-await for the same session reaches the backend as a separate call
-  if the backend fails before the timeout elapses
-    then that failure is returned unchanged
 
 when memory is added with a group, content and a source description
   then the write uses implicit-default memory, so a caller neither supplies nor configures an ontology
@@ -102,6 +51,3 @@ when community building is requested for a group
     then the number of communities and the number of edges are returned as a success
   if the backend fails
     then that failure is returned unchanged
-
-if an obsolete positional capture arity is called
-  then the adapter raises an explicit typed-request migration error

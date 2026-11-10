@@ -8,7 +8,6 @@ defmodule Gralkor.Client.Native do
 
   @behaviour Gralkor.Client
 
-  alias Gralkor.CaptureBuffer
   alias Gralkor.DefaultOntology
   alias Gralkor.Destination
   alias Gralkor.Destination.Storage.Graphiti, as: GraphitiStorage
@@ -38,40 +37,6 @@ defmodule Gralkor.Client.Native do
       end
 
     Recall.recall(group_id, agent_name, session_id, query, opts)
-  end
-
-  @impl Gralkor.Client
-  @spec capture(pid(), Gralkor.Capture.t()) :: :ok | {:error, term()}
-  def capture(runtime_owner, %Gralkor.Capture{} = request) do
-    routes = Gralkor.Capture.resolve!(runtime_owner, request)
-    CaptureBuffer.append_capture(runtime_owner, request, routes)
-  end
-
-  for arity <- [5, 6, 7, 8] do
-    arguments = Macro.generate_arguments(arity, __MODULE__)
-
-    def capture(unquote_splicing(arguments)) do
-      raise ArgumentError,
-            "positional capture/#{unquote(arity)} is retired; use Gralkor.Client.capture(runtime_owner, %Gralkor.Capture{route: {:direct, destination} | {:lenses, names}})"
-    end
-  end
-
-  @impl Gralkor.Client
-  def flush(session_id) do
-    raise_if_blank!(:session_id, session_id)
-    CaptureBuffer.flush(session_id)
-  end
-
-  @impl Gralkor.Client
-  def flush_and_await(session_id, timeout_ms) do
-    raise_if_blank!(:session_id, session_id)
-
-    unless is_integer(timeout_ms) and timeout_ms > 0 do
-      raise ArgumentError,
-            "Gralkor.Client.Native: timeout_ms must be a positive integer, got #{inspect(timeout_ms)}"
-    end
-
-    CaptureBuffer.flush_and_await(session_id, timeout_ms)
   end
 
   @impl Gralkor.Client

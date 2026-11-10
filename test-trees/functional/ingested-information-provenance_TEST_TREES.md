@@ -1,4 +1,4 @@
-Functional: ingested-information-provenance (src: lib/gralkor/ingest.ex, lib/gralkor/client.ex, lib/gralkor/client/native.ex, lib/gralkor/application.ex, lib/gralkor/search.ex, lib/gralkor/lens/store.ex, lib/gralkor/lens/storage/graphiti.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/graphiti_pool.ex, lib/gralkor/capture.ex, lib/gralkor/capture_buffer.ex, lib/gralkor/distill.ex, lib/gralkor/recall.ex, lib/jido_gralkor/runtime.ex; functional: test/functional/ingested_information_provenance_functional_test.exs)
+Functional: ingested-information-provenance (src: lib/gralkor/ingest.ex, lib/gralkor/client.ex, lib/gralkor/client/native.ex, lib/gralkor/application.ex, lib/gralkor/search.ex, lib/gralkor/lens/store.ex, lib/gralkor/lens/storage/graphiti.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/graphiti_pool.ex, lib/gralkor/recall.ex, lib/jido_gralkor/runtime.ex; functional: test/functional/ingested_information_provenance_functional_test.exs)
 
 when information is submitted through public ingestion with a supported source kind
   then its stored episode retains the declared source kind
@@ -23,11 +23,7 @@ when information is submitted through public ingestion with a supported source k
   then Graphiti's existing episode extraction is instructed to preserve source attribution and epistemic wording in extracted facts
   and Gralkor initiates no separate presentation-classification inference
 
-when captured conversation turns are ingested automatically
-  then Gralkor supplies conversation as their source kind
-  and their rendered speaker-attributed transcript is submitted as a conversational-message episode
-
-when information is added or captured directly without a selected Lens
+when information is added directly without a selected Lens
   then its source kind and description remain unchanged without Lens or Reflection authorship
   and public search includes it among both facts and episodes
   and storage-owned direct provenance prevents writer-like source descriptions from claiming Lens or Reflection authorship

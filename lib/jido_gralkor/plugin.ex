@@ -23,18 +23,8 @@ defmodule JidoGralkor.Plugin do
   `JidoGralkor.ReAct.maybe_force_memory_search/2` from their
   `Jido.AI.Reasoning.ReAct.RequestTransformer`.
 
-  Capture fires on `ai.request.completed` / `ai.request.failed`: the
-  full request trace and assistant answer are normalised via
-  `JidoGralkor.Canonical.to_messages/3` into Gralkor's canonical
-  `[%Gralkor.Message{role, content}]` shape and submitted to the configured
-  client through `Client.capture/2` with an explicit `Gralkor.Capture` route.
-  Direct capture selects the configured Destination; Lens capture selects its process.
-  The capture buffer keeps turn order by `session_id` and flushes Lens batches
-  independently.
-  Capture is skipped if the thread isn't present (first-turn failure
-  with nothing committed) or if the canonical message list is empty.
-  Capture failures raise; retry and backoff belong to the capture buffer, not
-  this plugin.
+  The plugin captures nothing. A consumer keeps its own chat record and
+  remembers it through `Gralkor.Client.ingest/2` with a Lens.
   """
 
   use Jido.Plugin,
@@ -50,15 +40,8 @@ defmodule JidoGralkor.Plugin do
     description: "Gralkor-backed long-term memory",
     capabilities: [:memory]
 
-  require Logger
-
-  alias Gralkor.Client
-  alias JidoGralkor.Canonical
   alias JidoGralkor.Runtime
-  alias Jido.AI.Request
   alias Jido.Signal
-
-  @no_thread_warning_hint "jido_ai commits state.thread on :request_completed, not at :ai.react.query"
 
   @impl Jido.Plugin
   def child_spec(config) do
@@ -106,9 +89,12 @@ defmodule JidoGralkor.Plugin do
             ":search_destinations was removed; use MemorySearch's per-search :destinations selector instead"
     end
 
-    capture_destination = fetch_opt(opts, :capture_destination)
-    validate_mount_destination!(runtime_config, capture_destination)
-    state = %{agent_name: agent_name, capture_destination: capture_destination}
+    if has_opt?(opts, :capture_destination) do
+      raise ArgumentError,
+            "capture was removed in 18.0.0, so :capture_destination is no longer accepted; keep your own chat record and remember it with Gralkor.Client.ingest/2 through a Lens such as \"personal-chat\""
+    end
+
+    state = %{agent_name: agent_name}
 
     case fetch_opt(opts, :ingestion_lens) do
       nil ->
@@ -120,31 +106,10 @@ defmodule JidoGralkor.Plugin do
     end
   end
 
-  defp validate_mount_destination!(runtime_config, name) do
-    names =
-      Gralkor.Destination.packaged_names() ++
-        Enum.map(runtime_config.destinations, &fetch_opt(&1, :name))
-
-    if name == "operator" do
-      raise ArgumentError,
-            "capture Destination \"operator\" was retired; migrate and select \"personal\""
-    end
-
-    if name in Gralkor.Destination.exclusive_names() do
-      raise ArgumentError,
-            "invalid :capture_destination #{inspect(name)}; only its packaged Reflection writes there"
-    end
-
-    unless name in names do
-      raise ArgumentError,
-            "invalid :capture_destination #{inspect(name)}; select a registered Destination explicitly"
-    end
-  end
-
   defp validate_mount_lens!(runtime_config, lens_name) do
     if lens_name in ["operator", "default"] do
       raise ArgumentError,
-            "Lens #{inspect(lens_name)} was retired; select \"personal-chat\" or explicit direct capture"
+            "Lens #{inspect(lens_name)} was retired; select \"personal-chat\" or omit :ingestion_lens for direct memory_add"
     end
 
     declared = Map.fetch!(runtime_config, :lenses)
@@ -182,114 +147,15 @@ defmodule JidoGralkor.Plugin do
       end
       |> Map.merge(lens_context(agent))
 
-    {:ok, {:continue, signal |> merge_tool_context(extras, owner) |> retain_request_context()}}
-  end
-
-  def handle_signal(
-        %Signal{
-          type: "ai.request.completed",
-          data: %{request_id: request_id, result: result}
-        },
-        %{agent: agent} = context
-      )
-      when is_binary(request_id) and is_binary(result) do
-    capture_turn(context, request_id, {:completed, result}, selected_lens(agent, request_id))
-    {:ok, :continue}
-  end
-
-  def handle_signal(
-        %Signal{
-          type: "ai.request.failed",
-          data: %{request_id: request_id, error: error}
-        },
-        %{agent: agent} = context
-      )
-      when is_binary(request_id) do
-    capture_turn(context, request_id, {:failed, error}, selected_lens(agent, request_id))
-    {:ok, :continue}
+    {:ok, {:continue, merge_tool_context(signal, extras, owner)}}
   end
 
   def handle_signal(_signal, _context), do: {:ok, :continue}
 
-  defp capture_turn(%{agent: agent} = context, request_id, outcome, lens) do
-    events =
-      agent.state
-      |> Map.get(:__strategy__, %{})
-      |> Map.get(:request_traces, %{})
-      |> Map.get(request_id, %{events: []})
-      |> Map.get(:events, [])
-
-    session_id = thread_id(agent)
-
-    cond do
-      events == [] and match?({:completed, _result}, outcome) ->
-        :ok
-
-      is_nil(session_id) ->
-        Logger.warning(
-          "[jido_gralkor] skipping capture — no thread committed yet for agent #{inspect(agent.id)} (#{@no_thread_warning_hint})"
-        )
-
-        :ok
-
-      true ->
-        user_query =
-          case Request.get_request(agent, request_id) do
-            %{query: q} when is_binary(q) -> q
-            _ -> ""
-          end
-
-        case Canonical.to_messages(user_query, events, outcome) do
-          [] ->
-            :ok
-
-          messages ->
-            user_name = user_name!(agent)
-
-            route =
-              case lens do
-                nil -> {:direct, Map.fetch!(plugin_state(agent), :capture_destination)}
-                name -> {:lenses, [name]}
-              end
-
-            result =
-              Client.capture(owning_agent_server!(context), %Gralkor.Capture{
-                session_id: session_id,
-                operator_id: agent.id,
-                agent_name: agent_name(agent),
-                user_name: user_name,
-                messages: messages,
-                route: route
-              })
-
-            case result do
-              :ok -> :ok
-              {:error, reason} -> raise "Gralkor capture failed: #{inspect(reason)}"
-            end
-        end
-    end
-  end
-
-  defp user_name!(agent) do
-    case Map.get(agent.state, :user_name) do
-      name when is_binary(name) ->
-        if String.trim(name) == "" do
-          raise ArgumentError,
-                "JidoGralkor.Plugin: agent.state[:user_name] is blank — the consumer must populate it (e.g. from `tool_context[:name]` in `on_before_cmd`) before any turn that captures"
-        else
-          name
-        end
-
-      other ->
-        raise ArgumentError,
-              "JidoGralkor.Plugin: agent.state[:user_name] missing (got #{inspect(other)}) — the consumer must populate it (e.g. from `tool_context[:name]` in `on_before_cmd`) before any turn that captures"
-    end
-  end
-
   defp agent_name(agent) do
     case plugin_state(agent) do
       %{agent_name: name} when is_binary(name) -> name
-      _ -> raise "JidoGralkor.Plugin state missing — mount/2 must run before recall/capture"
+      _ -> raise "JidoGralkor.Plugin state missing — mount/2 must run before a query"
     end
   end
 
@@ -302,37 +168,6 @@ defmodule JidoGralkor.Plugin do
         %{lens: nil}
     end
   end
-
-  defp selected_lens(agent, request_id) do
-    case request_lens(agent, request_id) do
-      {:ok, lens} -> lens
-      :error -> Map.get(plugin_state(agent), :ingestion_lens)
-    end
-  end
-
-  defp request_lens(agent, request_id) do
-    entry =
-      agent.state
-      |> Map.get(:__thread__, %{})
-      |> Map.get(:entries, [])
-      |> Enum.find(fn
-        %{refs: refs} when is_map(refs) -> ref_value(refs, :request_id) == request_id
-        _ -> false
-      end)
-
-    case entry do
-      %{refs: refs} ->
-        case Map.fetch(refs, :jido_gralkor_lens) do
-          :error -> Map.fetch(refs, "jido_gralkor_lens")
-          found -> found
-        end
-
-      _ ->
-        :error
-    end
-  end
-
-  defp ref_value(refs, key), do: Map.get(refs, key) || Map.get(refs, Atom.to_string(key))
 
   defp plugin_state(agent), do: Map.get(agent.state, :__memory__)
 
@@ -384,26 +219,9 @@ defmodule JidoGralkor.Plugin do
     %{signal | data: Map.put(data, :tool_context, new_context)}
   end
 
-  defp retain_request_context(%Signal{data: %{tool_context: tool_context} = data} = signal)
-       when is_map(tool_context) do
-    refs =
-      data
-      |> Map.get(:extra_refs, %{})
-      |> maybe_put_lens_ref(Map.get(tool_context, :lens))
-
-    %{signal | data: Map.put(data, :extra_refs, refs)}
-  end
-
-  defp retain_request_context(signal), do: signal
-
   defp runtime_lens!(_owner, nil), do: :ok
 
   defp runtime_lens!(owner, lens) when is_binary(lens), do: Runtime.lens!(owner, lens)
 
   defp runtime_lens!(_owner, lens), do: raise(ArgumentError, "invalid Lens #{inspect(lens)}")
-
-  defp maybe_put_lens_ref(refs, lens) when is_binary(lens) or is_nil(lens),
-    do: Map.put(refs, :jido_gralkor_lens, lens)
-
-  defp maybe_put_lens_ref(refs, _lens), do: refs
 end

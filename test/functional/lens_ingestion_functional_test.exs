@@ -196,7 +196,7 @@ defmodule Gralkor.LensIngestionFunctionalTest do
   end
 
   describe "where information is submitted directly without a mounted plugin or conversational turn" do
-    test "then the selected Lens's ingestion process runs without requiring an agent response or capture flush" do
+    test "then the selected Lens's ingestion process runs without requiring an agent response" do
       request = request("direct information")
 
       assert :ok = Client.ingest(request)
