@@ -2220,7 +2220,8 @@ defmodule Gralkor.GraphitiPool do
         :ok
     end
 
-    falkor_db = construct_falkor_db(construct_falkor_db, falkordb_spec, socket_timeout)
+    falkor_db =
+      construct_falkor_db(construct_falkor_db, falkordb_spec, socket_timeout, max_connections)
 
     state = %{
       table: table,
