@@ -65,6 +65,9 @@ defmodule Gralkor.Application do
   end
 
   defp falkordb_socket_options({:remote, _options}) do
-    [remote_falkordb_socket_timeout_ms: Config.remote_falkordb_socket_timeout_ms()]
+    [
+      remote_falkordb_socket_timeout_ms: Config.remote_falkordb_socket_timeout_ms(),
+      remote_falkordb_max_connections: Config.remote_falkordb_max_connections()
+    ]
   end
 end
