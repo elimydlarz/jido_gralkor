@@ -2408,10 +2408,11 @@ defmodule Gralkor.GraphitiPool do
     |> Config.validate_graph_operation_deadline_ms!()
   end
 
-  defp construct_falkor_db(constructor, spec, socket_timeout) do
+  defp construct_falkor_db(constructor, spec, socket_timeout, max_connections) do
     case :erlang.fun_info(constructor, :arity) do
       {:arity, 1} -> constructor.(spec)
       {:arity, 2} -> constructor.(spec, socket_timeout)
+      {:arity, 3} -> constructor.(spec, socket_timeout, max_connections)
     end
   end
 
