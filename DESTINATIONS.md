@@ -10,13 +10,12 @@ Lenses and Reflection Destination outputs reference registered Destinations by n
 
 ## Graph identity
 
-The package registers three Destinations:
+The package registers two Destinations:
 
 - `global` is the single shared global graph. Its logical graph ID is exactly `global` for every operator.
 - `personal` is private to one operator. Its logical graph ID is `personal/<same operator id>`.
-- `generalisations` is the shared graph the packaged generalisation Reflection writes to and reads its prior generalisations from. Its logical graph ID is exactly `generalisations` for every operator.
 
-An application cannot register a Destination named `personal`, `global`, or `generalisations`; configuration naming one is rejected rather than replacing the packaged Destination. Only the packaged generalisation Reflection writes to `generalisations`: a consumer Lens or a consumer Reflection Destination output naming it is rejected (`{:exclusive_destination, collection, name, "generalisations"}` in runtime configuration). Every operator reads it through any search that includes it, including selector-free search.
+An application cannot register a Destination named `personal` or `global`; configuration naming one is rejected rather than replacing the packaged Destination. Until 19.0.0 the package also owned a `generalisations` Destination that only its packaged generalisation Reflection could write; that name is now an ordinary application Destination name.
 
 An agent may register another Destination with only a name in its complete runtime configuration:
 
@@ -73,7 +72,7 @@ runtime_config = %{
 }
 ```
 
-The packaged `personal-chat` Lens writes with `Gralkor.DefaultOntology`. The packaged generalisation Reflection has a `generalisations` Destination output with `Gralkor.DefaultOntology`; packaged ERL has a `personal` Destination output with `Gralkor.Reflection.ERLOntology`.
+The packaged `personal-chat` Lens writes with `Gralkor.DefaultOntology`. The package declares no Reflections; each Reflection's Destination output selects its own ontology, defaulting to `Gralkor.DefaultOntology`.
 
 Direct memory addition uses the built-in ontology without Lens authorship. `personal-chat` runs only when explicitly selected and uses the existing Store ingestion process for every supported source kind. Storage marks new direct writes with a terminal ` [gralkor: direct]` marker, then removes that marker from the public source description. User descriptions cannot override the actual writer. Lens and Reflection names reserve both writer delimiters.
 
@@ -92,7 +91,7 @@ Gralkor.Client.search(agent_server, %Gralkor.Search{
 })
 ```
 
-That includes the packaged `personal`, `global`, and `generalisations` Destinations and every application Destination. Only the current operator's logical `personal/<operator id>` graph is searched; other registered Destinations retain their shared logical graph identity.
+That includes the packaged `personal` and `global` Destinations and every application Destination. Only the current operator's logical `personal/<operator id>` graph is searched; other registered Destinations retain their shared logical graph identity.
 
 `%Gralkor.Search{}` has exactly five optional fields besides `operator_id` and `query`:
 
@@ -193,11 +192,11 @@ A Reflection-written episode carries its whole artefact as structured fields ins
 
 A Reflection episode appears only once its extraction has durably completed. Reflection payload keys and values retain their stored shape; Graphiti JSON object keys are strings. Only Reflection-provenanced episode bodies are decoded. Lens-authored documents, Jira records, and even text that happens to look like an artefact remain text in `content`. A malformed completed Reflection body returns `{:error, {:invalid_reflection_artefact, reflection_name}}`; search does not return a manufactured partial response. Private graph identities still require the explicit namespace migration described above.
 
-`Gralkor.Client.search/1,2` never applies model presentation or budgeting. Readable presentation is separate: call `JidoGralkor.MemorySearchPresentation.sections/1` explicitly. `memory_search`, legacy `recall`, and the packaged generalisation Reflection's built-in inference prompt all use it; a consumer `:inference` function still receives the structured results.
+`Gralkor.Client.search/1,2` never applies model presentation or budgeting. Readable presentation is separate: call `JidoGralkor.MemorySearchPresentation.sections/1` explicitly. `memory_search` and legacy `recall` both use it.
 
 ### Readable memory search
 
-`memory_search` returns memory as sections, one string each; `recall` and the generalisation prompt join the same sections into one text. For example:
+`memory_search` returns memory as sections, one string each; `recall` joins the same sections into one text. For example:
 
 ```text
 Lens: jira
