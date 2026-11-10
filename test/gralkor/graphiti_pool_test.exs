@@ -4200,11 +4200,21 @@ defmodule Gralkor.GraphitiPoolTest do
         Pythonx.eval(
           """
           import falkordb.asyncio as falkor_asyncio
+          from types import SimpleNamespace
+          from redis.asyncio.connection import Connection
           original = falkor_asyncio.FalkorDB
 
           class _CloseProbe:
               def __init__(self, **kwargs):
                   self.closed = False
+                  # A real client's shape: the pool the remote constructor
+                  # replaces with a waiting one.
+                  self.connection = SimpleNamespace(
+                      connection_pool=SimpleNamespace(
+                          connection_class=Connection,
+                          connection_kwargs={'host': kwargs['host'], 'port': kwargs['port']},
+                      )
+                  )
 
               async def aclose(self):
                   self.closed = True
