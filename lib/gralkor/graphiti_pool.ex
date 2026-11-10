@@ -2643,7 +2643,6 @@ defmodule Gralkor.GraphitiPool do
       Pythonx.eval(
         """
         import asyncio
-        import redis.asyncio as aioredis
         import redis.exceptions
         from redis.asyncio.connection import BlockingConnectionPool
         from falkordb.asyncio import FalkorDB
@@ -2666,12 +2665,7 @@ defmodule Gralkor.GraphitiPool do
         h = host.decode('utf-8') if isinstance(host, (bytes, bytearray)) else host
         u = username.decode('utf-8') if isinstance(username, (bytes, bytearray)) else username
         p = password.decode('utf-8') if isinstance(password, (bytes, bytearray)) else password
-
-        # Builds no connection; it only resolves the connection settings
-        # (SSL included) that the waiting pool reuses, as FalkorDB(...) would
-        # (retry=None: falkordb's cluster probe hands these settings to a
-        # synchronous client, which cannot use redis's async default Retry).
-        settings = aioredis.Redis(
+        database = FalkorDB(
             host=h,
             port=port,
             username=u,
@@ -2679,19 +2673,20 @@ defmodule Gralkor.GraphitiPool do
             ssl=ssl,
             socket_timeout=socket_timeout,
             socket_connect_timeout=socket_timeout,
-            decode_responses=True,
-            retry=None,
-        ).connection_pool
-
-        FalkorDB(
-            connection_pool=_WaitingConnectionPool(
-                connection_class=settings.connection_class,
-                max_connections=max_connections,
-                timeout=socket_timeout,
-                **settings.connection_kwargs,
-            ),
-            ssl=ssl,
+            max_connections=max_connections,
         )
+
+        # FalkorDB(...) probes the server through a separate synchronous
+        # client, so its own asynchronous pool has opened no connection yet.
+        # Replace it with a waiting pool holding the same connection settings.
+        built = database.connection.connection_pool
+        database.connection.connection_pool = _WaitingConnectionPool(
+            connection_class=built.connection_class,
+            max_connections=max_connections,
+            timeout=socket_timeout,
+            **built.connection_kwargs,
+        )
+        database
         """,
         %{
           "host" => host,
