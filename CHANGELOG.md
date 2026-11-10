@@ -14,6 +14,12 @@ jido_gralkor no longer captures conversations. Its consumer keeps its own chat r
 - **`JidoGralkor.ContextRotator` is removed.** **Migrate:** to start a fresh context, stop the agent and start a new one, or rotate the thread yourself; remember the conversation from your own record first if you need it in memory.
 - **`Gralkor.Application.build_flush_callback/2` and `build_lens_flush_callback/1` are removed.** **Migrate:** none needed outside tests; they existed only for the capture buffer.
 
+### Fixed
+- **Graph operations failed with "Too many connections" under load.** The remote FalkorDB client used redis-py's default pool, which allows 100 connections and raises `redis.exceptions.MaxConnectionsError: Too many connections` at once when a graph operation needs a connection while every one is in use. Phil's Reflection deliveries failed this way while ingestion, searches, and deliveries ran together. A graph operation now waits for a connection to be released, for at most `:remote_falkordb_socket_timeout_ms`. A wait that runs out returns `{:error, :timeout}` and logs the stage it hit, like any other graph timeout.
+
+### Added
+- **`:remote_falkordb_max_connections`** caps the remote FalkorDB connections (default `100`, the cap before this release). It is validated as a positive integer when the remote backend starts, and application startup raises naming the setting and its value otherwise. The embedded backend is unaffected.
+
 ## [17.0.0] - 2026-11-09
 
 Search filters memory by the writer that produced it. Every episode, fact, and entity now records its writers, and a search includes or excludes writers by a constant check on each record, so a filtered search takes about as long as an unfiltered one.
