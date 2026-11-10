@@ -215,15 +215,12 @@ defmodule JidoGralkor.Runtime do
     do: {:error, {:invalid_configuration, configuration}}
 
   defp resolve_configuration(configuration, opts) do
-    packaged_reflections =
-      Keyword.get(opts, :packaged_reflections, &Gralkor.Reflection.Packaged.definitions/0)
-
     parse_chain_of_thought =
       Keyword.get(opts, :parse_chain_of_thought, &ChainOfThought.from_config/1)
 
     with :ok <- validate_definition_fields(configuration),
          :ok <- validate_definition_names(configuration),
-         :ok <- validate_reserved_names(configuration, packaged_reflections),
+         :ok <- validate_reserved_names(configuration),
          :ok <- validate_retired_references(configuration),
          :ok <- validate_lens_shapes(configuration.lenses),
          :ok <- validate_reflection_shapes(configuration.reflections, parse_chain_of_thought),
@@ -257,7 +254,7 @@ defmodule JidoGralkor.Runtime do
 
       reflections =
         Enum.map(
-          packaged_reflections.() ++ configuration.reflections,
+          configuration.reflections,
           fn definition ->
             {:ok, chain_of_thought} =
               parse_chain_of_thought.(field(definition, :chain_of_thought))
@@ -345,14 +342,10 @@ defmodule JidoGralkor.Runtime do
 
   defp known_field?(_key, _fields), do: false
 
-  defp validate_reserved_names(
-         configuration,
-         packaged_reflections
-       ) do
+  defp validate_reserved_names(configuration) do
     packaged = %{
       destinations: Destination.packaged_names(),
-      lenses: ["personal-chat", "global"],
-      reflections: Enum.map(packaged_reflections.(), &field(&1, :name))
+      lenses: ["personal-chat", "global"]
     }
 
     Enum.reduce_while(packaged, :ok, fn {collection, reserved}, :ok ->
@@ -614,23 +607,16 @@ defmodule JidoGralkor.Runtime do
 
   defp validate_lens_destinations(lenses, destination_names) do
     case Enum.find(lenses, fn definition ->
-           not MapSet.member?(destination_names, field(definition, :destination)) or
-             field(definition, :destination) in Destination.exclusive_names()
+           not MapSet.member?(destination_names, field(definition, :destination))
          end) do
       nil ->
         :ok
 
       definition ->
         {:error,
-         {destination_error(field(definition, :destination)), :lenses, field(definition, :name),
+         {:unknown_destination, :lenses, field(definition, :name),
           field(definition, :destination)}}
     end
-  end
-
-  defp destination_error(name) do
-    if name in Destination.exclusive_names(),
-      do: :exclusive_destination,
-      else: :unknown_destination
   end
 
   defp validate_reflection_destinations(reflections, destination_names) do
@@ -641,16 +627,15 @@ defmodule JidoGralkor.Runtime do
         if is_list(outputs) do
           Enum.find(outputs, fn output ->
             field(output, :kind) == :destination and
-              (not MapSet.member?(destination_names, field(output, :destination)) or
-                 field(output, :destination) in Destination.exclusive_names())
+              not MapSet.member?(destination_names, field(output, :destination))
           end)
         end
 
       if missing do
         {:halt,
          {:error,
-          {destination_error(field(missing, :destination)), :reflections,
-           field(reflection, :name), field(missing, :destination)}}}
+          {:unknown_destination, :reflections, field(reflection, :name),
+           field(missing, :destination)}}}
       else
         {:cont, :ok}
       end
@@ -959,7 +944,7 @@ defmodule JidoGralkor.Runtime do
   end
 
   defp validation_opts(opts) do
-    Keyword.take(opts, [:packaged_reflections, :parse_chain_of_thought])
+    Keyword.take(opts, [:parse_chain_of_thought])
   end
 
   defp runtime_pid!(owner) when is_pid(owner) do

@@ -505,10 +505,6 @@ defmodule Gralkor.Client do
             "invalid Lens #{inspect(lens_name)} Destination #{inspect(destination_name)}"
     end
 
-    if destination_name in Gralkor.Destination.exclusive_names() do
-      raise ArgumentError, "only its packaged Reflection writes to this Destination"
-    end
-
     DestinationRegistry.fetch!(destination_name)
   rescue
     error in ArgumentError ->
