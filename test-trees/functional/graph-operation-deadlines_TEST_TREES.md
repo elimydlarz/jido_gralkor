@@ -5,8 +5,15 @@ when the remote runtime starts
     then the remote connection uses a sixty-second socket timeout
   while a positive `:remote_falkordb_socket_timeout_ms` is configured
     then the remote connection uses that timeout
+  while no remote FalkorDB connection cap is configured
+    then the remote connections are capped at one hundred
+  while a positive `:remote_falkordb_max_connections` is configured
+    then the remote connections are capped at that number
 
 if `:remote_falkordb_socket_timeout_ms` is not a positive integer
+  then application startup raises naming the setting and its offending value
+
+if `:remote_falkordb_max_connections` is not a positive integer
   then application startup raises naming the setting and its offending value
 
 when the runtime starts
@@ -26,6 +33,14 @@ when a graph operation outlasts `:graph_operation_deadline_ms`
   and the outstanding graph work is cancelled
   and the timeout is logged with the stage it hit
   and the next graph operation still runs
+
+while every remote FalkorDB connection is in use
+  when another graph operation needs a connection
+    when a connection is released within the socket timeout
+      then the waiting operation completes with its result
+    if no connection is released within the socket timeout
+      then the waiting operation returns `{:error, :timeout}`
+      and the timeout is logged with the stage it hit
 
 while more episode writes are waiting on the graph or a model provider than the virtual machine has dirty CPU schedulers
   then a memory search still returns its results without waiting for them
