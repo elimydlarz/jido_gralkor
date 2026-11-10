@@ -25,7 +25,6 @@ defmodule Gralkor.Reflection.RunnerTest do
             end,
             artefact_id_for: fn
               "operator-one", "invocation-one", "review" -> "unit-artefact-id"
-              "operator-one", "invocation-one", "generalisations" -> "unit-artefact-id"
             end
           ],
           opts
@@ -544,32 +543,6 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
   end
 
-  describe "when the packaged generalisation Reflection runs" do
-    test "then one runtime-targeted related-memory search of the packaged `generalisations` Destination completes before inference" do
-      prove_runtime_targeted_related_memory_search()
-    end
-
-    test "and the search query contains every completed representation's content" do
-      prove_related_memory_query()
-    end
-
-    test "and the resulting stored information is available to every inference step" do
-      prove_related_memory_reaches_every_step()
-    end
-  end
-
-  describe "when the packaged generalisation Reflection runs > if related-memory search fails" do
-    test "then the Runner fails before inference and identifies the search failure" do
-      prove_related_memory_failure()
-    end
-  end
-
-  describe "when another Reflection runs" do
-    test "then no related-memory search is issued" do
-      prove_other_reflection_skips_related_memory()
-    end
-  end
-
   describe "when built-in inference is invoked for a step" do
     test "then it runs through Jido's standalone ReAct runtime with the directions, exact output contract, and representations" do
       prove_built_in_inference_request()
@@ -609,79 +582,9 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
   end
 
-  describe "when built-in inference is invoked for a step > while the stored information holds memories" do
-    test "then the stored information is presented under a related-stored-information heading" do
-      prompt = built_in_prompt(default_inference_request())
-
-      assert prompt =~ "Related stored information available to this Reflection step:\n"
-      assert stored_section(prompt) =~ "Gate every customer-impacting release behind a checkpoint"
-    end
-
-    test "and the stored information is presented in the memory search format, including each generalisation's level and lineage" do
-      prompt = built_in_prompt(default_inference_request())
-
-      formatted =
-        stored_generalisations()
-        |> JidoGralkor.MemorySearchPresentation.sections()
-        |> JidoGralkor.MemorySearchPresentation.text()
-
-      assert stored_section(prompt) == formatted
-
-      assert formatted ==
-               "Reflection: generalisations\n" <>
-                 "- Gate every customer-impacting release behind a checkpoint\n" <>
-                 "  level: 2\n" <>
-                 "  evolves_from:\n" <>
-                 "  - Gate critical deployments behind a canary\n" <>
-                 "    level: 1"
-    end
-
-    test "and the stored information is not presented as JSON" do
-      section = stored_section(built_in_prompt(default_inference_request()))
-
-      refute section =~ Jason.encode!(stored_generalisations())
-      assert {:error, _} = Jason.decode(section)
-      refute section =~ "artefact-one"
-      refute section =~ ~s("level")
-    end
-  end
-
-  describe "when built-in inference is invoked for a step > while the stored information holds no memory" do
-    test "then the prompt has no related-stored-information heading" do
-      for stored <- [[], [%{destination: "generalisations", facts: [], nodes: [], episodes: []}]] do
-        prompt = built_in_prompt(%{default_inference_request() | stored_information: stored})
-
-        refute prompt =~ "Related stored information"
-        refute prompt =~ "No matching memory"
-      end
-    end
-  end
-
   describe "when built-in inference is invoked for a step > if the provider fails or returns invalid JSON or a non-object JSON value" do
     test "then built-in inference returns the identified error" do
       prove_built_in_inference_errors()
-    end
-  end
-
-  describe "when a consumer inference function is supplied" do
-    test "then it receives the stored information as the structured search results" do
-      test_pid = self()
-      stored = stored_generalisations()
-      search = fn _owner, _request -> {:ok, stored} end
-
-      inference = fn request ->
-        send(test_pid, {:stored_information, request.stored_information})
-        {:ok, output_for(request)}
-      end
-
-      assert {:ok, %Artefact{}} =
-               Runner.run(generalisation_reflection(), invocation(),
-                 runtime_owner: self(),
-                 related_memory_search: search,
-                 inference: inference
-               )
-
-      assert_receive {:stored_information, ^stored}
     end
   end
 
@@ -1055,124 +958,6 @@ defmodule Gralkor.Reflection.RunnerTest do
              )
   end
 
-  defp prove_runtime_targeted_related_memory_search do
-    test_pid = self()
-    owner = self()
-
-    search = fn received_owner, request ->
-      send(test_pid, {:runner_event, :related_memory_search, received_owner, request})
-      {:ok, [%{content: "stored information"}]}
-    end
-
-    inference = fn request ->
-      send(test_pid, {:runner_event, :inference, request.step.label})
-      {:ok, output_for(request)}
-    end
-
-    assert {:ok, %Artefact{}} =
-             Runner.run(generalisation_reflection(), invocation(),
-               runtime_owner: owner,
-               related_memory_search: search,
-               inference: inference
-             )
-
-    assert_receive {:runner_event, :related_memory_search, ^owner,
-                    %Search{destinations: ["generalisations"], entity_types: [], edge_types: []}}
-
-    assert_receive {:runner_event, :inference, "collect"}
-    assert_receive {:runner_event, :inference, "decide"}
-    refute_receive {:runner_event, :related_memory_search, _, _}
-  end
-
-  defp prove_related_memory_query do
-    test_pid = self()
-
-    search = fn owner, request ->
-      send(test_pid, {:related_memory_query, owner, request})
-      {:ok, []}
-    end
-
-    representations = [
-      representation(content: "First completed representation."),
-      representation(id: "representation-two", content: "Second completed representation.")
-    ]
-
-    assert {:ok, %Artefact{}} =
-             Runner.run(generalisation_reflection(), invocation(representations: representations),
-               runtime_owner: :runtime_owner,
-               related_memory_search: search,
-               inference: &successful_inference/1
-             )
-
-    assert_receive {:related_memory_query, :runtime_owner,
-                    %Search{
-                      operator_id: "operator-one",
-                      query: query
-                    }}
-
-    assert query == "First completed representation.\nSecond completed representation."
-  end
-
-  defp prove_related_memory_reaches_every_step do
-    test_pid = self()
-    stored = [%{content: "related observation"}, %{content: "prior generalisation"}]
-    search = fn _owner, _request -> {:ok, stored} end
-
-    inference = fn request ->
-      send(test_pid, {:stored_information, request.step.label, request.stored_information})
-      {:ok, output_for(request)}
-    end
-
-    assert {:ok, %Artefact{}} =
-             Runner.run(generalisation_reflection(), invocation(),
-               runtime_owner: self(),
-               related_memory_search: search,
-               inference: inference
-             )
-
-    assert_receive {:stored_information, "collect", ^stored}
-    assert_receive {:stored_information, "decide", ^stored}
-  end
-
-  defp prove_related_memory_failure do
-    test_pid = self()
-    search = fn _owner, _request -> {:error, :unavailable} end
-
-    inference = fn _request ->
-      send(test_pid, :inference_started)
-      {:ok, %{}}
-    end
-
-    assert {:error,
-            %{reflection: "generalisations", reason: {:related_memory_search, :unavailable}}} =
-             Runner.run(generalisation_reflection(), invocation(),
-               runtime_owner: self(),
-               related_memory_search: search,
-               inference: inference
-             )
-
-    refute_receive :inference_started
-  end
-
-  defp prove_other_reflection_skips_related_memory do
-    test_pid = self()
-
-    search = fn _owner, _request ->
-      send(test_pid, :related_memory_searched)
-      {:ok, []}
-    end
-
-    assert {:ok, %Artefact{}} =
-             Runner.run(single_step_reflection(), invocation(),
-               runtime_owner: self(),
-               related_memory_search: search,
-               inference: &successful_inference/1
-             )
-
-    refute_receive :related_memory_searched
-    refute_receive {:destination_search, _, _, _, _}
-  end
-
   defp prove_built_in_inference_request do
     test_pid = self()
 
@@ -1371,47 +1156,6 @@ defmodule Gralkor.Reflection.RunnerTest do
     prompt
   end
 
-  defp stored_section(prompt) do
-    [_, rest] =
-      String.split(prompt, "Related stored information available to this Reflection step:\n",
-        parts: 2
-      )
-
-    [section | _] = String.split(rest, "\n\nReturn only one JSON object", parts: 2)
-    String.trim(section)
-  end
-
-  defp stored_generalisations do
-    [
-      %{
-        destination: "generalisations",
-        facts: [],
-        nodes: [],
-        episodes: [
-          %{
-            uuid: "episode-one",
-            reflection: "generalisations",
-            source_description: "reflection:generalisations",
-            artefact: %{
-              id: "artefact-one",
-              payload: %{
-                "generalisations" => [
-                  %{
-                    "content" => "Gate every customer-impacting release behind a checkpoint",
-                    "level" => 2,
-                    "evolves_from" => [
-                      %{"content" => "Gate critical deployments behind a canary", "level" => 1}
-                    ]
-                  }
-                ]
-              }
-            }
-          }
-        ]
-      }
-    ]
-  end
-
   defp prompt_json(prompt, heading, _next_heading) do
     [_, rest] = String.split(prompt, heading <> "\n", parts: 2)
     [encoded | _] = String.split(rest, "\n\n", parts: 2)
@@ -1552,9 +1296,6 @@ defmodule Gralkor.Reflection.RunnerTest do
   defp single_step_reflection,
     do: reflection([step("finish", "Finish.", %{"answer" => "string"})])
 
-  defp generalisation_reflection,
-    do: reflection(sequence_steps(), "generalisations")
-
   defp reflection(steps, name \\ "review") do
     %Reflection{
       name: name,
@@ -1613,7 +1354,6 @@ defmodule Gralkor.Reflection.RunnerTest do
           internal_note: "must not leak"
         }
       ],
-      stored_information: stored_generalisations(),
       tools: [SampleTool],
       tool_context: %{
         operator_id: "conflicting-operator",
