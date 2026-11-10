@@ -2654,6 +2654,7 @@ defmodule Gralkor.GraphitiPool do
             ssl=ssl,
             socket_timeout=socket_timeout,
             socket_connect_timeout=socket_timeout,
+            max_connections=max_connections,
         )
         """,
         %{
@@ -2662,7 +2663,8 @@ defmodule Gralkor.GraphitiPool do
           "username" => username,
           "password" => password,
           "ssl" => ssl,
-          "socket_timeout" => socket_timeout
+          "socket_timeout" => socket_timeout,
+          "max_connections" => max_connections
         }
       )
 
