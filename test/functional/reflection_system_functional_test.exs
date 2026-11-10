@@ -55,33 +55,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     def get_artefact(_, _, _, _), do: {:error, :not_found}
   end
 
-  defmodule GeneralisationProbeStorage do
-    @behaviour Gralkor.Destination.Storage
-
-    @impl true
-    def search(destination, operator_id, query, opts) do
-      send(
-        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
-        {:related_memory_search, destination.name, operator_id, query, opts}
-      )
-
-      {:ok, %{facts: [], nodes: [], episodes: []}}
-    end
-
-    @impl true
-    def put_artefact(output, _reflection_name, _operator_id, artefact) do
-      send(
-        Application.fetch_env!(:jido_gralkor, :reflection_output_test_pid),
-        {:generalisation_delivered, output.destination.name, artefact}
-      )
-
-      :ok
-    end
-
-    @impl true
-    def get_artefact(_, _, _, _), do: {:error, :not_found}
-  end
-
   defmodule OutputProbeStorage do
     @behaviour Gralkor.Destination.Storage
 
@@ -383,28 +356,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when an agent's Gralkor runtime installs its package-owned Reflection definitions" do
-    test "then ERL declares one Destination output referencing the packaged `personal` Destination" do
-      erl = packaged_reflection("erl")
-
-      assert [%{kind: :destination, destination: %Gralkor.Destination{name: "personal"}}] =
-               erl.outputs
-    end
-
-    test "and ERL's Destination output carries jido_gralkor's built-in experiential-learning ontology" do
-      erl = packaged_reflection("erl")
-
-      assert destination_output(erl).ontology == Gralkor.Reflection.ERLOntology
-    end
-
-    test "and generalisation declares one Destination output referencing the packaged `generalisations` Destination" do
-      generalisation = packaged_reflection("generalisations")
-
-      assert [%{kind: :destination, destination: %Gralkor.Destination{name: "generalisations"}}] =
-               generalisation.outputs
-    end
-  end
-
   describe "where an application-defined Destination output omits its ontology" do
     test "then the output selects generic extraction for a runtime-delivered artefact" do
       reflection = resolve_reflection(valid_definition())
@@ -428,48 +379,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         )
 
       assert destination_output(reflection).ontology == ReflectionOntology
-    end
-  end
-
-  describe "when a consumer stores the default ERL Reflection's artefact through its Destination output" do
-    test "then extraction receives the built-in `Learning` entity type from that output's ontology" do
-      erl = packaged_reflection("erl")
-      artefact = Gralkor.Artefact.new("erl-artefact", erl_payload())
-      caller = self()
-
-      add_episode = fn group_id, content, source, ontology, opts ->
-        send(caller, {:reflection_episode, group_id, content, source, ontology, opts})
-        :ok
-      end
-
-      assert :ok =
-               Gralkor.Destination.Storage.Graphiti.put_artefact(
-                 destination_output(erl),
-                 erl.name,
-                 "operator-one",
-                 artefact,
-                 add_episode
-               )
-
-      assert_receive {:reflection_episode, _group_id, _content, "reflection:erl",
-                      Gralkor.Reflection.ERLOntology, [uuid: artefact_id]}
-
-      assert artefact_id == artefact.id
-    end
-
-    test "and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields" do
-      [learning] = Gralkor.Reflection.ERLOntology.__ontology__().entity_types
-
-      assert learning.name == "Learning"
-      assert Enum.map(learning.fields, & &1.name) == [:problem_kind, :approach, :success, :lesson]
-      assert Enum.all?(learning.fields, &(&1.required == false))
-    end
-
-    test "and the Runner-returned Learning payload contains exactly its problem kind, approach, success, and reusable lesson" do
-      erl = packaged_reflection("erl")
-
-      assert {:ok, artefact} = Runner.run(erl, invocation(), inference: &erl_output_for/1)
-      assert artefact.payload == erl_payload()
     end
   end
 
@@ -501,61 +410,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                  ]
                }
              } = resolve_reflection(definition)
-    end
-  end
-
-  describe "when the package-owned generalisation Reflection is installed" do
-    test "then it retains related-memory search and normalized generalisation artefacts" do
-      Application.put_env(:jido_gralkor, :destination_storage, GeneralisationProbeStorage)
-
-      agent_server =
-        start_supervised!(
-          {Jido.AgentServer,
-           agent: AsyncConsumerAgent, id: "packaged-generalisation", register_global: false}
-        )
-
-      generalisations = [
-        %{
-          "content" => "Small releases reduce rollback risk.",
-          "level" => 1,
-          "evolves_from" => []
-        }
-      ]
-
-      inference = fn
-        %{step: %{label: "inspect-world"}} ->
-          {:ok, %{output: %{inspection: "Two observations agree."}}}
-
-        %{step: %{label: "evolve-generalisations"}} ->
-          {:ok, %{output: %{generalisations: generalisations}}}
-      end
-
-      test_pid = self()
-
-      assert {:ok, "packaged-generalisation-invocation"} =
-               Client.reflect(
-                 agent_server,
-                 "generalisations",
-                 %{invocation() | id: "packaged-generalisation-invocation"},
-                 &send(test_pid, {:generalisation_callback, &1}),
-                 inference: inference
-               )
-
-      assert_receive {:related_memory_search, "generalisations", "operator-one",
-                      "fact one\nfact two", [limits: %{facts: 50, nodes: 20, episodes: 15}]}
-
-      assert_receive {:generalisation_callback,
-                      %{
-                        outcome: :delivered,
-                        artefact: %Gralkor.Artefact{payload: payload}
-                      }}
-
-      assert payload == %{"generalisations" => generalisations}
-
-      assert_receive {:generalisation_delivered, "generalisations",
-                      %Gralkor.Artefact{payload: ^payload}}
-
-      refute_received {:related_memory_search, _destination, _operator, _query, _opts}
     end
   end
 
@@ -614,29 +468,19 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   end
 
   describe "when a Reflection Runner is invoked > while the initial step prompt exceeds 100,000 characters" do
-    test "then the configured model receives the complete directions, representations, stored information, and output contract" do
+    test "then the configured model receives the complete directions, representations, and output contract" do
       content = String.duplicate("retained source ", 10_000)
       representations = [%{id: "source-one", lens: "observations", content: content, result: :ok}]
 
-      stored = [
-        %{
-          destination: "global",
-          facts: [],
-          nodes: [],
-          episodes: [%{content: "related evidence", lens: "observations"}]
-        }
-      ]
-
       schema = %{"answer" => "string"}
 
-      register_step("Inspect all evidence.", representations, stored, schema, [
+      register_step("Inspect all evidence.", representations, schema, [
         answer_turn("ready")
       ])
 
       request = %{
         directions: "Inspect all evidence.",
         representations: representations,
-        stored_information: stored,
         output_schema: schema,
         operator_id: "operator-one",
         tools: [],
@@ -664,7 +508,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         }
       }
 
-      prompt = expected_step_prompt(directions, [], [], schema)
+      prompt = expected_step_prompt(directions, [], schema)
 
       Jido.AI.Test.ReActScript.new(%{
         user: prompt,
@@ -737,7 +581,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert [%{content: prompt}] = messages
 
       assert prompt ==
-               expected_step_prompt("Conclude " <> answer, [], [], %{"conclusion" => "string"})
+               expected_step_prompt("Conclude " <> answer, [], %{"conclusion" => "string"})
     end
 
     test "and valid model output completes the remaining Chain of Thought" do
@@ -772,7 +616,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert [first, continuation, final] = model_requests()
       assert hd(first) == hd(continuation)
       assert [%{content: prompt}] = final
-      assert prompt == expected_step_prompt("Conclude ready", [], [], %{"conclusion" => "string"})
+      assert prompt == expected_step_prompt("Conclude ready", [], %{"conclusion" => "string"})
     end
   end
 
@@ -821,7 +665,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
             "first representation"
           )
         ],
-        stored_information: [],
         tools: tools,
         tool_context: tool_context,
         operator_id: "operator-one"
@@ -862,7 +705,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
         directions: "Use memory.",
         output_schema: %{"artefact" => "string"},
         representations: [],
-        stored_information: [],
         tools: [],
         tool_context: tool_context,
         operator_id: "invocation-operator"
@@ -891,7 +733,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       parent = self()
       schema = %{"answer" => "string"}
 
-      register_step("Resolve the model.", [], [], schema, [answer_turn("ready")])
+      register_step("Resolve the model.", [], schema, [answer_turn("ready")])
 
       reflection = %Gralkor.Reflection{
         name: "resolved-model",
@@ -926,41 +768,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   describe "when a Chain of Thought step begins > where the Runner is given no model resolver" do
     test "then built-in inference runs Gralkor's configured LLM model" do
       configured = Gralkor.Config.llm_model()
-      assert step_call(stored_request([])).model == "#{configured.provider}:#{configured.id}"
-    end
-  end
-
-  describe "when a Chain of Thought step begins > while the step's stored information holds memories" do
-    test "then built-in inference receives those memories under a related-stored-information heading" do
-      stored = [
-        %{
-          destination: "global",
-          facts: [],
-          nodes: [],
-          episodes: [%{content: "related evidence", lens: "observations"}]
-        }
-      ]
-
-      [_, section] =
-        String.split(
-          step_call(stored_request(stored)).prompt,
-          "Related stored information available to this Reflection step:\n",
-          parts: 2
-        )
-
-      assert section =~ "related evidence"
-    end
-  end
-
-  describe "when a Chain of Thought step begins > while the step's stored information holds no memory" do
-    test "then built-in inference receives no related-stored-information heading" do
-      for stored <- [[], [%{destination: "global", facts: [], nodes: [], episodes: []}]] do
-        prompt = step_call(stored_request(stored)).prompt
-
-        assert prompt =~ "Use memory."
-        refute prompt =~ "Related stored information"
-        refute prompt =~ "No matching memory"
-      end
+      assert step_call(step_request()).model == "#{configured.provider}:#{configured.id}"
     end
   end
 
@@ -1692,9 +1500,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
-  describe "when the packaged ERL Reflection delivers to personal memory" do
+  describe "when a Reflection delivers to personal memory" do
     test "then its artefact is searchable only by the invocation identity" do
-      artefact = deliver_personal_erl()
+      artefact = deliver_personal_reflection()
 
       expected = Map.from_struct(artefact)
 
@@ -1714,35 +1522,50 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
 
     test "and its artefact identifier remains derived from the unchanged operator and invocation identifiers" do
-      artefact = deliver_personal_erl()
-      assert artefact.id == Gralkor.Artefact.id_for("owner", "personal-erl-invocation", "erl")
+      artefact = deliver_personal_reflection()
+
+      assert artefact.id ==
+               Gralkor.Artefact.id_for("owner", "personal-reflection-invocation", "lessons")
     end
   end
 
-  defp deliver_personal_erl do
+  defp deliver_personal_reflection do
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.InMemory)
 
+    lessons = %{
+      name: "lessons",
+      outputs: [%{kind: :destination, destination: "personal"}],
+      chain_of_thought: %{
+        steps: [
+          %{label: "derive-lesson", directions: "Derive a lesson.", output: %{"lesson" => "string"}}
+        ]
+      }
+    }
+
     start_supervised!(
-      {Runtime, owner: self(), configuration: %{destinations: [], lenses: [], reflections: []}}
+      {Runtime,
+       owner: self(), configuration: %{destinations: [], lenses: [], reflections: [lessons]}}
     )
 
     parent = self()
 
-    assert {:ok, "personal-erl-invocation"} =
+    assert {:ok, "personal-reflection-invocation"} =
              Client.reflect(
                self(),
-               "erl",
+               "lessons",
                %{
-                 id: "personal-erl-invocation",
+                 id: "personal-reflection-invocation",
                  operator_id: "owner",
                  representations: [],
                  invocation_context: %{}
                },
-               &send(parent, {:personal_erl, &1}),
-               inference: &erl_output_for/1
+               &send(parent, {:personal_reflection, &1}),
+               inference: fn _request ->
+                 {:ok, %{output: %{"lesson" => "separate recurring jobs"}}}
+               end
              )
 
-    assert_receive {:personal_erl, %{outcome: :delivered, artefact: artefact}}, 1_000
+    assert_receive {:personal_reflection, %{outcome: :delivered, artefact: artefact}}, 1_000
     artefact
   end
 
@@ -1894,15 +1717,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     result
   end
 
-  defp erl_payload do
-    %{
-      "problem_kind" => "overlapping schedules",
-      "approach" => "move one job",
-      "success" => true,
-      "lesson" => "separate recurring jobs"
-    }
-  end
-
   defp output_for(%{step: %{label: "gather"}}), do: {:ok, %{output: %{"facts" => ["fact one"]}}}
 
   defp output_for(%{step: %{label: "synthesise"}}),
@@ -1910,31 +1724,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   defp output_for(%{step: %{label: "reflect"}}),
     do: {:ok, %{output: %{"artefact" => "durable pattern"}}}
-
-  defp erl_output_for(%{step: %{label: "inspect-reasoning"}}) do
-    {:ok,
-     %{
-       output: %{
-         "reasoning_assessment" => %{
-           "problem_kind" => "overlapping schedules",
-           "approach" => "move one job",
-           "outcome" => "succeeded"
-         }
-       }
-     }}
-  end
-
-  defp erl_output_for(%{step: %{label: "derive-lesson"}}) do
-    {:ok,
-     %{
-       output: %{
-         "learning_candidate" => erl_payload()
-       }
-     }}
-  end
-
-  defp erl_output_for(%{step: %{label: "synthesise-artefact"}}),
-    do: {:ok, %{output: erl_payload()}}
 
   defp run_and_collect_requests(reflection, invocation) do
     parent = self()
@@ -2030,10 +1819,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   defp definition_name(definition) when is_map(definition),
     do: Map.get(definition, :name) || Map.fetch!(definition, "name")
 
-  defp packaged_reflection(name) do
-    with_runtime(runtime_configuration([]), &Runtime.reflection!(&1, name))
-  end
-
   defp with_runtime(configuration, fun) do
     owner =
       spawn(fn ->
@@ -2067,13 +1852,13 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   defp restore_env(key, nil), do: Application.delete_env(:jido_gralkor, key)
   defp restore_env(key, value), do: Application.put_env(:jido_gralkor, key, value)
 
-  defp expected_step_prompt(directions, representations, stored_information, schema) do
+  defp expected_step_prompt(directions, representations, schema) do
     """
     #{directions}
 
     Lensed representations available to this Reflection step:
     #{Jason.encode!(representations)}
-    #{expected_stored_section(stored_information)}
+
     Return only one JSON object satisfying this exact output contract:
     #{Jason.encode!(schema)}
 
@@ -2106,7 +1891,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     }
 
     Jido.AI.Test.ReActScript.new(%{
-      user: expected_step_prompt(first.directions, [], [], schema),
+      user: expected_step_prompt(first.directions, [], schema),
       turns: turns
     })
     |> Jido.AI.Test.ReActScript.register()
@@ -2118,7 +1903,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
   defp run_observed_reflection(turns, answer \\ "ready") do
     {reflection, invocation} = scripted_reflection(turns)
 
-    register_step("Conclude " <> answer, [], [], %{"conclusion" => "string"}, [
+    register_step("Conclude " <> answer, [], %{"conclusion" => "string"}, [
       %{type: :answer, text: ~s({"conclusion":"done"})}
     ])
 
@@ -2137,31 +1922,6 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     )
   end
 
-  defp expected_stored_section(stored_information) do
-    if Enum.all?(stored_information, &(&1.facts == [] and &1.nodes == [] and &1.episodes == [])) do
-      ""
-    else
-      presented =
-        stored_information
-        |> JidoGralkor.MemorySearchPresentation.sections()
-        |> JidoGralkor.MemorySearchPresentation.text()
-
-      "\nRelated stored information available to this Reflection step:\n#{presented}\n"
-    end
-  end
-
-  defp stored_request(stored) do
-    %{
-      directions: "Use memory.",
-      output_schema: %{"artefact" => "string"},
-      representations: [],
-      stored_information: stored,
-      tools: [],
-      tool_context: %{},
-      operator_id: "operator-one"
-    }
-  end
-
   defp step_call(request) do
     parent = self()
 
@@ -2175,9 +1935,9 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     observed
   end
 
-  defp register_step(directions, representations, stored, schema, turns) do
+  defp register_step(directions, representations, schema, turns) do
     Jido.AI.Test.ReActScript.new(%{
-      user: expected_step_prompt(directions, representations, stored, schema),
+      user: expected_step_prompt(directions, representations, schema),
       turns: turns
     })
     |> Jido.AI.Test.ReActScript.register()
