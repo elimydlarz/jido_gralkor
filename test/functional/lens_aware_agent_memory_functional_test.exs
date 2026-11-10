@@ -499,7 +499,8 @@ defmodule JidoGralkor.LensAwareAgentMemoryFunctionalTest do
     %{
       destinations: [
         %{name: "observations"},
-        %{name: "decisions"}
+        %{name: "decisions"},
+        %{name: "generalisations"}
       ],
       lenses: [
         %{
