@@ -2391,6 +2391,17 @@ defmodule Gralkor.GraphitiPool do
     |> Kernel./(1_000)
   end
 
+  defp falkordb_max_connections({:embedded, _data_dir}, _opts), do: nil
+
+  defp falkordb_max_connections({:remote, _options}, opts) do
+    opts
+    |> Keyword.get_lazy(
+      :remote_falkordb_max_connections,
+      &Config.remote_falkordb_max_connections/0
+    )
+    |> Config.validate_remote_falkordb_max_connections!()
+  end
+
   defp graph_operation_deadline(opts) do
     opts
     |> Keyword.get_lazy(:graph_operation_deadline_ms, &Config.graph_operation_deadline_ms/0)
