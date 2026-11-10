@@ -2179,8 +2179,9 @@ defmodule Gralkor.GraphitiPool do
     install_index_building_without_stopwords!()
 
     socket_timeout = falkordb_socket_timeout(falkordb_spec, opts)
+    max_connections = falkordb_max_connections(falkordb_spec, opts)
     deadline_ms = graph_operation_deadline(opts)
-    construct_falkor_db = Keyword.get(opts, :construct_falkor_db, &default_construct_falkor_db/2)
+    construct_falkor_db = Keyword.get(opts, :construct_falkor_db, &default_construct_falkor_db/3)
 
     close_falkor_db =
       Keyword.get_lazy(opts, :close_falkor_db, fn ->
