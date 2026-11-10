@@ -11,7 +11,7 @@ when a caller searches memory
 
   where the Destination selector is omitted or empty
     then every accessible registered Destination is selected
-    and results follow the order `personal`, `global`, `generalisations`, then application Destinations
+    and results follow the order `personal`, `global`, then application Destinations
     and including or excluding a Lens writer does not narrow the search to that Lens's Destination
 
   where one or more Destinations are supplied

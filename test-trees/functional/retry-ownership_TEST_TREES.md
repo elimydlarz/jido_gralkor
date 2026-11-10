@@ -3,7 +3,7 @@ Functional: retry-ownership (src: lib/gralkor/client.ex, lib/gralkor/destination
 when a direct graph write fails
   then the direct caller receives the failure after one attempt
 
-when Reflection production, packaged generalisation related-memory retrieval, or Destination delivery reports a retryable server failure
+when Reflection production or Destination delivery reports a retryable server failure
   then the failing boundary retries with exponential backoff
   and another Reflection invocation continues independently
   while a later attempt succeeds

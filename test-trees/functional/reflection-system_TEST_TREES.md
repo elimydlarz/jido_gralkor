@@ -1,4 +1,4 @@
-Functional: reflection-system (src: lib/jido_gralkor/plugin.ex, lib/jido_gralkor/runtime.ex, lib/gralkor/reflection.ex, lib/gralkor/reflection/erl_ontology.ex, lib/gralkor/artefact.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex, lib/gralkor/reflection/packaged.ex, lib/gralkor/application.ex; functional: test/functional/reflection_system_functional_test.exs)
+Functional: reflection-system (src: lib/jido_gralkor/plugin.ex, lib/jido_gralkor/runtime.ex, lib/gralkor/reflection.ex, lib/gralkor/artefact.ex, lib/gralkor/reflection/chain_of_thought.ex, lib/gralkor/reflection/runner.ex, lib/gralkor/destination/storage/in_memory.ex, lib/gralkor/destination/storage/graphiti.ex, lib/gralkor/client.ex, lib/gralkor/search.ex, lib/gralkor/ingested_representation.ex, lib/gralkor/application.ex; functional: test/functional/reflection_system_functional_test.exs)
 
 when an agent runtime validates Reflection declarations
   while all declarations satisfy their naming, Chain-of-Thought, and Destination-output requirements
@@ -70,27 +70,14 @@ when an agent runtime validates Reflection declarations
   if a Destination output declares an invalid ontology
     then validation fails identifying that Reflection and ontology
 
-when an agent's Gralkor runtime installs its package-owned Reflection definitions
-  then ERL declares one Destination output referencing the packaged `personal` Destination
-  and ERL's Destination output carries jido_gralkor's built-in experiential-learning ontology
-  and generalisation declares one Destination output referencing the packaged `generalisations` Destination
-
 where an application-defined Destination output omits its ontology
   then the output selects generic extraction for a runtime-delivered artefact
 
 where an application-defined Destination output declares an application ontology
   then the output selects that ontology for a runtime-delivered artefact
 
-when a consumer stores the default ERL Reflection's artefact through its Destination output
-  then extraction receives the built-in `Learning` entity type from that output's ontology
-  and the `Learning` extraction contract declares optional problem kind, approach, success, and reusable lesson fields
-  and the Runner-returned Learning payload contains exactly its problem kind, approach, success, and reusable lesson
-
 when a consumer Reflection is installed in an agent's runtime configuration
   then its inline steps become the Reflection's Chain of Thought
-
-when the package-owned generalisation Reflection is installed
-  then it retains related-memory search and normalized generalisation artefacts
 
 when a Reflection Runner is invoked
   then its ordered Chain of Thought runner starts its first step for the supplied operator and invocation
@@ -99,7 +86,7 @@ when a Reflection Runner is invoked
     then every representation is available with its identifier, Lens identity, content, and storage result
 
   while the initial step prompt exceeds 100,000 characters
-    then the configured model receives the complete directions, representations, stored information, and output contract
+    then the configured model receives the complete directions, representations, and output contract
     and valid model output completes the Reflection without a local prompt-length rejection
 
   while an earlier step's output makes a later step prompt exceed 100,000 characters
@@ -135,11 +122,6 @@ when a Chain of Thought step begins
     then built-in inference runs the model that resolver names
   where the Runner is given no model resolver
     then built-in inference runs Gralkor's configured LLM model
-
-  while the step's stored information holds memories
-    then built-in inference receives those memories under a related-stored-information heading
-  while the step's stored information holds no memory
-    then built-in inference receives no related-stored-information heading
 
   where the directions reference outputs from earlier steps
     then every referenced value is interpolated from the Chain of Thought's shared output space
@@ -216,6 +198,6 @@ when a Destination holding Reflection artefacts is searched
 if the retired `:reflection_storage` setting is configured
   then application startup fails identifying Destination outputs as the artefact memory boundary
 
-when the packaged ERL Reflection delivers to personal memory
+when a Reflection delivers to personal memory
   then its artefact is searchable only by the invocation identity
   and its artefact identifier remains derived from the unchanged operator and invocation identifiers

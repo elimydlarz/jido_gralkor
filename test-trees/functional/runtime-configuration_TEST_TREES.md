@@ -1,17 +1,16 @@
-Functional: runtime-configuration (src: lib/jido_gralkor/runtime.ex, lib/jido_gralkor/plugin.ex, lib/gralkor/reflection/packaged.ex, lib/gralkor/client.ex, lib/jido_gralkor/actions/memory_search.ex; functional: test/functional/runtime_configuration_functional_test.exs)
+Functional: runtime-configuration (src: lib/jido_gralkor/runtime.ex, lib/jido_gralkor/plugin.ex, lib/gralkor/client.ex, lib/jido_gralkor/actions/memory_search.ex; functional: test/functional/runtime_configuration_functional_test.exs)
 
 when a consumer starts a Jido agent with the Gralkor plugin
   then the plugin starts one Gralkor runtime under that agent
   and that runtime owns the agent's runtime configuration
   and that runtime supervises the agent's Reflection processing and output delivery
-  and it installs package-owned structured definitions for the `personal`, `global`, and `generalisations` Destinations
+  and it installs package-owned structured definitions for the `personal` and `global` Destinations
   and it installs the package-owned `personal-chat` Lens
-  and it installs package-owned structured definitions for the generalisations and ERL Reflections
   and it installs the complete consumer configuration supplied when the agent started
 
 when a consumer replaces one agent's runtime configuration with complete valid Destination, Lens, and Reflection collections
   then the complete consumer configuration becomes active as one snapshot for that agent
-  and the packaged Destinations, Lens, and Reflections remain active
+  and the packaged Destinations and Lens remain active
   and another agent's runtime configuration remains unchanged
   and the call returns only after the replacement is active
 
@@ -76,9 +75,6 @@ if current configuration uses a retired operator Destination or Lens name
 
 if consumer configuration claims a packaged Destination or Lens name
   then validation rejects the conflicting consumer definition before activating it
-
-if a consumer Lens or Reflection writes to the packaged `generalisations` Destination
-  then validation rejects it before activating it
 
 if a consumer Destination begins with personal/ or operator/
   then validation rejects the private or retired graph namespace

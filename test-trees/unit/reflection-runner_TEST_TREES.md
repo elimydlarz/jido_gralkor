@@ -51,16 +51,6 @@ when the final step returns valid wrapped structured output
 if inference fails or returns an invalid response
   then the Runner failure identifies the Reflection, current step, and reason
 
-when the packaged generalisation Reflection runs
-  then one runtime-targeted related-memory search of the packaged `generalisations` Destination completes before inference
-  and the search query contains every completed representation's content
-  and the resulting stored information is available to every inference step
-  if related-memory search fails
-    then the Runner fails before inference and identifies the search failure
-
-when another Reflection runs
-  then no related-memory search is issued
-
 when built-in inference is invoked for a step
   then it runs through Jido's standalone ReAct runtime with the directions, exact output contract, and representations
   and the representations and output contract remain JSON
@@ -71,12 +61,6 @@ when built-in inference is invoked for a step
     then it runs the model that resolver names
   where no model resolver is supplied
     then it runs Gralkor's configured LLM model
-  while the stored information holds memories
-    then the stored information is presented under a related-stored-information heading
-    and the stored information is presented in the memory search format, including each generalisation's level and lineage
-    and the stored information is not presented as JSON
-  while the stored information holds no memory
-    then the prompt has no related-stored-information heading
   if the provider fails or returns invalid JSON or a non-object JSON value
     then built-in inference returns the identified error
   if the ReAct runtime ends without a final answer
@@ -95,6 +79,3 @@ when built-in inference is invoked for a step
       then the observer is told the call's identifier, tool name, duration, and whether it succeeded
     when the ReAct runtime emits any other event
       then the observer is told nothing
-
-when a consumer inference function is supplied
-  then it receives the stored information as the structured search results
