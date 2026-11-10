@@ -199,9 +199,7 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
 
   describe "while every remote FalkorDB connection is in use > when another graph operation needs a connection > when a connection is released within the socket timeout" do
     test "then the waiting operation completes with its result" do
-      %{pool: pool, graph: graph} = start_connection_holding_pool(5_000)
-      holder = Task.async(fn -> write(pool) end)
-      assert_eventually(fn -> graph_value(graph, "holding") end)
+      %{pool: pool, graph: graph, holder: holder} = start_connection_holding_pool(5_000)
 
       waiter = Task.async(fn -> write(pool) end)
       assert Task.yield(waiter, 300) == nil
@@ -214,17 +212,13 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
 
   describe "while every remote FalkorDB connection is in use > when another graph operation needs a connection > if no connection is released within the socket timeout" do
     test "then the waiting operation returns `{:error, :timeout}`" do
-      %{pool: pool, graph: graph} = start_connection_holding_pool(300)
-      Task.async(fn -> write(pool) end)
-      assert_eventually(fn -> graph_value(graph, "holding") end)
+      %{pool: pool} = start_connection_holding_pool(300)
 
       assert write(pool) == {:error, :timeout}
     end
 
     test "and the timeout is logged with the stage it hit" do
-      %{pool: pool, graph: graph} = start_connection_holding_pool(300)
-      Task.async(fn -> write(pool) end)
-      assert_eventually(fn -> graph_value(graph, "holding") end)
+      %{pool: pool} = start_connection_holding_pool(300)
 
       assert capture_log(fn -> write(pool) end) =~ "stage:add_episode"
     end
@@ -391,16 +385,13 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
         end
       )
 
-    graph =
-      Task.async(fn -> GraphitiPool.add_episode(pool, "holding", "warm", "notes", nil, []) end)
-      |> then(fn _first_write ->
-        assert_receive {:connection_holding_graph, graph}, 5_000
-        graph
-      end)
+    holder = Task.async(fn -> write(pool) end)
+    assert_receive {:connection_holding_graph, graph}, 5_000
+    assert_eventually(fn -> graph_value(graph, "holding") end)
 
     on_exit(fn -> release(graph) end)
 
-    %{pool: pool, graph: graph}
+    %{pool: pool, graph: graph, holder: holder}
   end
 
   defp connection_holding_graph(database) do
@@ -419,9 +410,9 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
                 if self.holding:
                     await self.connection.ping()
                     return
-                self.holding = True
                 pool = self.connection.connection_pool
                 held = await pool.get_connection()
+                self.holding = True
                 try:
                     await self.gate.wait()
                 finally:
