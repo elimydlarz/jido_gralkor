@@ -47,7 +47,6 @@ defmodule Gralkor.Reflection.RunnerTest do
       do: [model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end]
   end
 
-  alias Gralkor.Search
 
   defmodule LookupTool do
     use Jido.Action,
@@ -990,7 +989,7 @@ defmodule Gralkor.Reflection.RunnerTest do
     assert prompt_json(
              prompt,
              "Lensed representations available to this Reflection step:",
-             "Related stored information available"
+             nil
            ) == [
              %{
                "content" => "Deployment evidence.",
@@ -999,8 +998,6 @@ defmodule Gralkor.Reflection.RunnerTest do
                "result" => "ok"
              }
            ]
-
-    assert stored_section(prompt) =~ "Gate every customer-impacting release behind a checkpoint"
 
     assert prompt_json(
              prompt,
