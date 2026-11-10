@@ -15,6 +15,11 @@ defmodule Gralkor.Config do
     * The remote FalkorDB socket timeout — configured in milliseconds as
       `:remote_falkordb_socket_timeout_ms`, defaulting to 60 seconds. It is
       validated only when the remote backend starts.
+    * The remote FalkorDB connection cap — configured as
+      `:remote_falkordb_max_connections`, defaulting to 100. A graph operation
+      that needs a connection while all of them are in use waits for one to be
+      released, up to the socket timeout. It is validated only when the remote
+      backend starts.
     * The graph operation deadline — configured in milliseconds as
       `:graph_operation_deadline_ms`, defaulting to 30 minutes. It bounds every
       call across the Python bridge, inference included, so it must outlast a
