@@ -28,7 +28,7 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
 
       start_application_pool()
 
-      assert_receive {:constructed_falkordb, {:remote, _options}, 60.0}
+      assert_receive {:constructed_falkordb, {:remote, _options}, 60.0, _max_connections}
     end
   end
 
@@ -38,7 +38,17 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
 
       start_application_pool()
 
-      assert_receive {:constructed_falkordb, {:remote, _options}, 90.0}
+      assert_receive {:constructed_falkordb, {:remote, _options}, 90.0, _max_connections}
+    end
+  end
+
+  describe "when the remote runtime starts > while no remote FalkorDB connection cap is configured" do
+    test "then the remote connections are capped at one hundred" do
+      delete_env_restored(:remote_falkordb_max_connections)
+
+      start_application_pool()
+
+      assert_receive {:constructed_falkordb, {:remote, _options}, _socket_timeout, 100}
     end
   end
 
