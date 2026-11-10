@@ -1537,7 +1537,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       outputs: [%{kind: :destination, destination: "personal"}],
       chain_of_thought: %{
         steps: [
-          %{label: "derive-lesson", directions: "Derive a lesson.", output: %{"lesson" => "string"}}
+          %{
+            label: "derive-lesson",
+            directions: "Derive a lesson.",
+            output: %{"lesson" => "string"}
+          }
         ]
       }
     }

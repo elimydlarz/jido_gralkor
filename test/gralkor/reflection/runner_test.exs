@@ -47,7 +47,6 @@ defmodule Gralkor.Reflection.RunnerTest do
       do: [model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end]
   end
 
-
   defmodule LookupTool do
     use Jido.Action,
       name: "lookup",
