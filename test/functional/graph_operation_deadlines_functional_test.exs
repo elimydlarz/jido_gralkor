@@ -197,6 +197,39 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
     end
   end
 
+  describe "while every remote FalkorDB connection is in use > when another graph operation needs a connection > when a connection is released within the socket timeout" do
+    test "then the waiting operation completes with its result" do
+      %{pool: pool, graph: graph} = start_connection_holding_pool(5_000)
+      holder = Task.async(fn -> write(pool) end)
+      assert_eventually(fn -> graph_value(graph, "holding") end)
+
+      waiter = Task.async(fn -> write(pool) end)
+      assert Task.yield(waiter, 300) == nil
+      release(graph)
+
+      assert Task.await(waiter, 5_000) == :ok
+      assert Task.await(holder, 5_000) == :ok
+    end
+  end
+
+  describe "while every remote FalkorDB connection is in use > when another graph operation needs a connection > if no connection is released within the socket timeout" do
+    test "then the waiting operation returns `{:error, :timeout}`" do
+      %{pool: pool, graph: graph} = start_connection_holding_pool(300)
+      Task.async(fn -> write(pool) end)
+      assert_eventually(fn -> graph_value(graph, "holding") end)
+
+      assert write(pool) == {:error, :timeout}
+    end
+
+    test "and the timeout is logged with the stage it hit" do
+      %{pool: pool, graph: graph} = start_connection_holding_pool(300)
+      Task.async(fn -> write(pool) end)
+      assert_eventually(fn -> graph_value(graph, "holding") end)
+
+      assert capture_log(fn -> write(pool) end) =~ "stage:add_episode"
+    end
+  end
+
   defp write(pool) do
     GraphitiPool.add_episode(pool, "deadlines", "A write.", "notes", nil, [])
   end
