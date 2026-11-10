@@ -46,6 +46,7 @@ defmodule Gralkor.Config do
   @default_embedder_model %{provider: :google, id: "gemini-embedding-2-preview"}
   @default_embedded_falkordb_socket_timeout_ms 60_000
   @default_remote_falkordb_socket_timeout_ms 60_000
+  @default_remote_falkordb_max_connections 100
   @default_graph_operation_deadline_ms 1_800_000
 
   # Graphiti 0.31.2's prompt groups and their prompts
