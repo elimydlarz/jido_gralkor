@@ -2614,7 +2614,7 @@ defmodule Gralkor.GraphitiPool do
 
   # ── Defaults: real Pythonx-backed construction ──────────────
 
-  defp default_construct_falkor_db({:embedded, data_dir}, socket_timeout) do
+  defp default_construct_falkor_db({:embedded, data_dir}, socket_timeout, nil) do
     db_path = Path.join(data_dir, "gralkor.db")
 
     {db, _} =
