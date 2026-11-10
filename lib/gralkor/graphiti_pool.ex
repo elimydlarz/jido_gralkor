@@ -2642,11 +2642,34 @@ defmodule Gralkor.GraphitiPool do
     {db, _} =
       Pythonx.eval(
         """
+        import asyncio
+        import redis.asyncio as aioredis
+        import redis.exceptions
+        from redis.asyncio.connection import BlockingConnectionPool
         from falkordb.asyncio import FalkorDB
+
+        # Waits up to the socket timeout for a free connection instead of
+        # failing at once with MaxConnectionsError, and reports a wait that
+        # runs out as a timeout.
+        class _WaitingConnectionPool(BlockingConnectionPool):
+            async def get_connection(self, *args, **kwargs):
+                try:
+                    return await super().get_connection(*args, **kwargs)
+                except redis.exceptions.ConnectionError as err:
+                    if isinstance(err.__cause__, asyncio.TimeoutError):
+                        raise redis.exceptions.TimeoutError(
+                            f"no FalkorDB connection was free within {self.timeout}s "
+                            f"(max_connections={self.max_connections})"
+                        ) from err
+                    raise
+
         h = host.decode('utf-8') if isinstance(host, (bytes, bytearray)) else host
         u = username.decode('utf-8') if isinstance(username, (bytes, bytearray)) else username
         p = password.decode('utf-8') if isinstance(password, (bytes, bytearray)) else password
-        FalkorDB(
+
+        # Builds no connection; it only resolves the connection settings
+        # (SSL included) that the waiting pool reuses.
+        settings = aioredis.Redis(
             host=h,
             port=port,
             username=u,
@@ -2654,7 +2677,17 @@ defmodule Gralkor.GraphitiPool do
             ssl=ssl,
             socket_timeout=socket_timeout,
             socket_connect_timeout=socket_timeout,
-            max_connections=max_connections,
+            decode_responses=True,
+        ).connection_pool
+
+        FalkorDB(
+            connection_pool=_WaitingConnectionPool(
+                connection_class=settings.connection_class,
+                max_connections=max_connections,
+                timeout=socket_timeout,
+                **settings.connection_kwargs,
+            ),
+            ssl=ssl,
         )
         """,
         %{
