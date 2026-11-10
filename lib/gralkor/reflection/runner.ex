@@ -1,12 +1,9 @@
 defmodule Gralkor.Reflection.Runner do
   @moduledoc "Runs a repository-defined Chain of Thought as an ordered, tool-capable inference sequence."
 
-  alias Gralkor.Client
   alias Gralkor.Artefact
   alias Gralkor.Reflection
   alias Gralkor.Reflection.ChainOfThought
-  alias Gralkor.Search
-  alias JidoGralkor.MemorySearchPresentation
 
   @max_output_tokens 32_768
   @dropped_call_retry_delays_ms [1_000, 2_000, 4_000]
@@ -25,34 +22,10 @@ defmodule Gralkor.Reflection.Runner do
     tools = Keyword.get(opts, :tools, [])
     tool_context = Keyword.get(opts, :tool_context, %{})
 
-    case related_memory(reflection, ingestion, opts) do
-      {:ok, stored_information} ->
-        run_steps(
-          reflection,
-          ingestion,
-          inference,
-          tool_executor,
-          tools,
-          tool_context,
-          stored_information,
-          opts
-        )
-
-      {:error, reason} ->
-        {:error, %{reflection: reflection.name, reason: {:related_memory_search, reason}}}
-    end
+    run_steps(reflection, ingestion, inference, tool_executor, tools, tool_context, opts)
   end
 
-  defp run_steps(
-         reflection,
-         ingestion,
-         inference,
-         tool_executor,
-         tools,
-         tool_context,
-         stored_information,
-         opts
-       ) do
+  defp run_steps(reflection, ingestion, inference, tool_executor, tools, tool_context, opts) do
     observer = Keyword.get(opts, :observer, fn _event -> :ok end)
 
     result =
@@ -68,7 +41,6 @@ defmodule Gralkor.Reflection.Runner do
           step: %{label: step.label, directions: directions},
           directions: directions,
           output_schema: step.output,
-          stored_information: stored_information,
           tools: tools,
           tool_context: tool_context,
           tool_results: []
@@ -110,33 +82,6 @@ defmodule Gralkor.Reflection.Runner do
     end
   end
 
-  defp related_memory(%Reflection{} = reflection, ingestion, opts) do
-    if packaged_generalisation?(reflection) do
-      search_related_memory(ingestion, opts)
-    else
-      {:ok, []}
-    end
-  end
-
-  defp search_related_memory(ingestion, opts) do
-    representations = representations(ingestion)
-
-    query =
-      representations
-      |> Enum.map(&field(&1, :content))
-      |> Enum.map(&render_value/1)
-      |> Enum.join("\n")
-
-    request = %Search{
-      operator_id: field(ingestion, :operator_id),
-      query: query,
-      destinations: ["generalisations"]
-    }
-
-    search = Keyword.get(opts, :related_memory_search, &Client.search/2)
-    search.(Keyword.fetch!(opts, :runtime_owner), request)
-  end
-
   defp build_artefact(reflection, ingestion, outputs, final, opts) do
     payload = Map.take(outputs, Map.keys(final.output))
 
@@ -150,10 +95,6 @@ defmodule Gralkor.Reflection.Runner do
 
     {:ok, Artefact.new(id, payload)}
   end
-
-  defp packaged_generalisation?(%Reflection{name: "generalisations"}), do: true
-
-  defp packaged_generalisation?(%Reflection{}), do: false
 
   defp infer_step(request, inference, tool_executor) do
     case inference.(request) do
@@ -245,22 +186,12 @@ defmodule Gralkor.Reflection.Runner do
 
   def default_inference(request, run_step, opts)
       when is_function(run_step, 3) and is_list(opts) do
-    # Prior memory reads exactly as `memory_search` presents it to an agent.
-    stored_information =
-      request.stored_information
-      |> MemorySearchPresentation.sections()
-      |> MemorySearchPresentation.text()
-
-    run_default_inference(request, stored_information, run_step, opts)
-  end
-
-  defp run_default_inference(request, stored_information, run_step, opts) do
     prompt = """
     #{request.directions}
 
     Lensed representations available to this Reflection step:
     #{Jason.encode!(serializable_representations(request))}
-    #{stored_section(request.stored_information, stored_information)}
+
     Return only one JSON object satisfying this exact output contract:
     #{Jason.encode!(request.output_schema)}
 
@@ -346,17 +277,6 @@ defmodule Gralkor.Reflection.Runner do
 
   defp react_events(prompt, config, opts),
     do: Jido.AI.Reasoning.ReAct.stream(prompt, config, opts)
-
-  defp stored_section(results, presented) do
-    if Enum.any?(results, &holds_memory?/1) do
-      "\nRelated stored information available to this Reflection step:\n#{presented}\n"
-    else
-      ""
-    end
-  end
-
-  defp holds_memory?(result),
-    do: Enum.any?([:facts, :nodes, :episodes], &(Map.get(result, &1, []) != []))
 
   @doc false
   def observed_react(input, config, opts) do

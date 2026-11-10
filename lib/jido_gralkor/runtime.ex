@@ -783,8 +783,7 @@ defmodule JidoGralkor.Runtime do
   end
 
   defp process_reflection(reflection, invocation, callback, opts, state) do
-    production_opts = Keyword.put(opts, :runtime_owner, state.owner)
-    production = fn -> state.run_reflection.(reflection, invocation, production_opts) end
+    production = fn -> state.run_reflection.(reflection, invocation, opts) end
 
     case retry(production, &match?({:ok, _artefact}, &1)) do
       {:ok, {:ok, artefact}} ->
