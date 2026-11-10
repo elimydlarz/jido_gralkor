@@ -52,6 +52,16 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
     end
   end
 
+  describe "when the remote runtime starts > while a positive `:remote_falkordb_max_connections` is configured" do
+    test "then the remote connections are capped at that number" do
+      put_env_restored(:remote_falkordb_max_connections, 7)
+
+      start_application_pool()
+
+      assert_receive {:constructed_falkordb, {:remote, _options}, _socket_timeout, 7}
+    end
+  end
+
   describe "if `:remote_falkordb_socket_timeout_ms` is not a positive integer" do
     test "then application startup raises naming the setting and its offending value" do
       use_remote_application_backend()
