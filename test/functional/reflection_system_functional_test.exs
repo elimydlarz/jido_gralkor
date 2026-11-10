@@ -1922,6 +1922,17 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     )
   end
 
+  defp step_request do
+    %{
+      directions: "Use memory.",
+      output_schema: %{"artefact" => "string"},
+      representations: [],
+      tools: [],
+      tool_context: %{},
+      operator_id: "operator-one"
+    }
+  end
+
   defp step_call(request) do
     parent = self()
 
