@@ -41,31 +41,21 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
     );
   });
 
+  await context.test("and no other session's activity is waited for or blocks the publication", async () => {
+    const skill = await readFile(skillUrl, "utf8");
+
+    assert.match(skill, /Never wait for, coordinate with, or message another session before publishing\./);
+    assert.match(skill, /other sessions' releases never block a publication/);
+  });
+
   await context.test(
-    "and read-only Git preflight proves the local default branch matches its remote tip",
+    "and read-only Git preflight proves the current branch is the remote default branch",
     async () => {
       const skill = await readFile(skillUrl, "utf8");
 
-      assert.match(skill, /git status --short/);
-      assert.match(skill, /git diff/);
       assert.match(skill, /git branch --show-current/);
-      assert.match(skill, /git rev-parse HEAD/);
-      assert.match(skill, /git ls-remote --symref origin HEAD refs\/heads\/<current-branch>/);
-      assert.match(skill, /Require the current branch to be the remote default branch/);
-      assert.match(skill, /Require the local commit to equal the remote branch tip/);
-    },
-  );
-
-  await context.test(
-    "and the complete test suite passes through `mix test.all` before release state changes",
-    async () => {
-      const skill = await readFile(skillUrl, "utf8");
-
-      assert.match(skill, /Run `mix test\.all` before editing the version\./);
-      assert.match(
-        skill,
-        /Shell-source `<repo-root>\/\.env` before running `mix test\.all` so configured provider credentials override ambient test placeholders\./,
-      );
+      assert.match(skill, /git ls-remote --symref origin HEAD/);
+      assert.match(skill, /Require the current branch to be the remote default branch\./);
     },
   );
 
@@ -94,29 +84,40 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
   });
 
   await context.test(
-    "and after the test suite passes, `jido_gralkor` ownership is transferred from the gralkor organization to `elimydlarz` and verified through that user's owned packages before the version changes",
+    "and `jido_gralkor` ownership is transferred to `elimydlarz` and verified through that user's owned packages before the test suite runs",
     async () => {
       const skill = await readFile(skillUrl, "utf8");
 
       assert.match(skill, /mix hex\.owner packages/);
       assert.match(skill, /mix hex\.owner transfer jido_gralkor elimydlarz/);
-      assert.match(skill, /Require `jido_gralkor` to appear in `elimydlarz`'s owned-package list before editing `mix\.exs`\./);
-      assert.ok(skill.indexOf("mix test.all") < skill.indexOf("mix hex.owner transfer"));
-      assert.ok(skill.indexOf("mix hex.owner transfer") < skill.indexOf("edit only `@version` in `mix.exs`"));
+      assert.match(skill, /Require `jido_gralkor` to appear in `elimydlarz`'s owned-package list\./);
+      assert.ok(skill.indexOf("mix hex.owner transfer") < skill.indexOf("Run `mix test.all`"));
     },
   );
 
   await context.test(
-    "and the version change is synchronized to the remote default branch by trunk-sync before Hex publication",
+    "and the complete test suite passes through `mix test.all` before the version changes",
     async () => {
       const skill = await readFile(skillUrl, "utf8");
 
-      assert.match(skill, /Read `@version` from `mix\.exs` and calculate the requested semantic-version change\./);
-      assert.match(skill, /edit only `@version` in `mix\.exs`/i);
-      assert.match(skill, /require the command's trunk-sync hook result to succeed/i);
+      assert.match(skill, /Run `mix test\.all` before editing the version\./);
+      assert.match(
+        skill,
+        /Shell-source `<repo-root>\/\.env` before running `mix test\.all` so configured provider credentials override ambient test placeholders\./,
+      );
+      assert.ok(skill.indexOf("Run `mix test.all`") < skill.indexOf("edit only `@version` in `mix.exs`"));
+    },
+  );
+
+  await context.test(
+    "and the version change is committed and pushed by trunk-sync before Hex publication",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(skill, /Read `@version` from `mix\.exs` immediately before editing it\./);
+      assert.match(skill, /edit only `@version` in `mix\.exs`/);
       assert.match(skill, /require trunk-sync to commit and push the version change/i);
-      assert.match(skill, /Record the synchronized release commit with `git rev-parse HEAD`/);
-      assert.match(skill, /Require the remote branch tip to equal the synchronized release commit before publishing to Hex\./);
+      assert.ok(skill.indexOf("## Bump") < skill.indexOf("mix hex.publish --yes"));
     },
   );
 
@@ -125,28 +126,42 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
 
     assert.match(
       skill,
-      /Do not run direct write-side Git commands, including `git fetch`, `git add`, `git commit`, `git tag`, or `git push`\./,
+      /Do not run direct write-side Git commands, including `git fetch`, `git pull`, `git add`, `git commit`, `git tag`, or `git push`\./,
     );
     assert.match(skill, /Run every read-only Git inspection as its own standalone command/);
     assert.match(skill, /Do not run `scripts\/publish\.sh` because it performs direct write-side Git commands\./);
-    assert.doesNotMatch(skill, /^git (?:fetch|add|commit|tag [^-]|push)/m);
+    assert.doesNotMatch(skill, /^git (?:fetch|pull|add|commit|tag [^-]|push)/m);
   });
 
-  await context.test(
-    "and Hex receives the synchronized version as a personally owned public package",
-    async () => {
-      const skill = await readFile(skillUrl, "utf8");
-      const envExample = await readFile(envExampleUrl, "utf8");
+  await context.test("and the package holds only committed content", async () => {
+    const skill = await readFile(skillUrl, "utf8");
 
-      assert.match(skill, /HEX_API_KEY="\$HEX_TOKEN" mix hex\.publish --yes/);
-      assert.match(skill, /Require `mix\.exs` still to contain the prepared version/);
-      assert.match(skill, /Require `HEAD` and the remote branch tip still to equal the synchronized release commit/);
-      assert.match(skill, /personally owned public package in the global Hex repository/);
-      assert.doesNotMatch(skill, /mix hex\.publish --organization/);
-      assert.match(envExample, /personal Hex user `elimydlarz`/);
-      assert.doesNotMatch(envExample, /manage both the gralkor organization package/);
-    },
-  );
+    assert.match(skill, /git status --short -- lib priv config mix\.exs README\.md/);
+    assert.match(skill, /Require it to print nothing so the package contains only committed content\./);
+  });
+
+  await context.test("and the remote branch contains the release commit before Hex publication", async () => {
+    const skill = await readFile(skillUrl, "utf8");
+
+    assert.match(
+      skill,
+      /gh api --method GET 'repos\/\{owner\}\/\{repo\}\/compare\/<release-commit>\.\.\.<remote-branch-tip>'/,
+    );
+    assert.match(skill, /Require the comparison status to be `identical` or `ahead`\./);
+    assert.ok(skill.indexOf("compare/<release-commit>") < skill.indexOf("mix hex.publish --yes"));
+  });
+
+  await context.test("and Hex receives the release version as a personally owned public package", async () => {
+    const skill = await readFile(skillUrl, "utf8");
+    const envExample = await readFile(envExampleUrl, "utf8");
+
+    assert.match(skill, /HEX_API_KEY="\$HEX_TOKEN" mix hex\.publish --yes/);
+    assert.match(skill, /Read `@version` from `mix\.exs`\. This is the release version/);
+    assert.match(skill, /personally owned public package in the global Hex repository/);
+    assert.doesNotMatch(skill, /mix hex\.publish --organization/);
+    assert.match(envExample, /personal Hex user `elimydlarz`/);
+    assert.doesNotMatch(envExample, /manage both the gralkor organization package/);
+  });
 
   await context.test(
     "and every repository-relative document linked from the published README is included in the Hex package",
@@ -181,44 +196,25 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
     assert.match(mix, /maintainers:\s*\["elimydlarz"\]/);
   });
 
-  await context.test(
-    "and GitHub receives a new lightweight release tag for the synchronized release commit",
-    async () => {
-      const skill = await readFile(skillUrl, "utf8");
+  await context.test("and GitHub receives a new lightweight release tag for the release commit", async () => {
+    const skill = await readFile(skillUrl, "utf8");
 
-      assert.match(skill, /jido-gralkor-v<version>/);
-      assert.match(skill, /gh api --method POST 'repos\/\{owner\}\/\{repo\}\/git\/refs'/);
-      assert.match(skill, /"ref":"refs\/tags\/jido-gralkor-v<version>"/);
-      assert.match(skill, /"sha":"<release-commit>"/);
-      assert.match(skill, /--input "<temporary-reference-request>"/);
-      assert.doesNotMatch(skill, /-f 'ref=refs\/tags\/jido-gralkor-v<version>'/);
-      assert.match(skill, /Create only a lightweight reference/);
-      assert.match(skill, /Never update or replace an existing release tag\./);
-    },
-  );
+    assert.match(skill, /jido-gralkor-v<version>/);
+    assert.match(skill, /gh api --method POST 'repos\/\{owner\}\/\{repo\}\/git\/refs'/);
+    assert.match(skill, /"ref":"refs\/tags\/jido-gralkor-v<version>"/);
+    assert.match(skill, /"sha":"<release-commit>"/);
+    assert.match(skill, /--input "<temporary-reference-request>"/);
+    assert.doesNotMatch(skill, /-f 'ref=refs\/tags\/jido-gralkor-v<version>'/);
+    assert.match(skill, /Create only a lightweight reference/);
+    assert.match(skill, /Never update or replace an existing release tag\./);
+  });
 
-  await context.test(
-    "and remote inspection proves the release tag resolves to the synchronized release commit",
-    async () => {
-      const skill = await readFile(skillUrl, "utf8");
+  await context.test("and remote inspection proves the release tag resolves to the release commit", async () => {
+    const skill = await readFile(skillUrl, "utf8");
 
-      assert.match(skill, /git ls-remote origin refs\/heads\/<current-branch> refs\/tags\/jido-gralkor-v<version>/);
-      assert.match(skill, /Require the release tag to resolve to the synchronized release commit\./);
-    },
-  );
-
-  await context.test(
-    "and the remote branch contains the synchronized release commit even if trunk-sync bookkeeping advances the branch after publication",
-    async () => {
-      const skill = await readFile(skillUrl, "utf8");
-
-      assert.match(
-        skill,
-        /gh api --method GET 'repos\/\{owner\}\/\{repo\}\/compare\/<release-commit>\.\.\.<remote-branch-tip>'/,
-      );
-      assert.match(skill, /Require the comparison status to be `identical` or `ahead`\./);
-    },
-  );
+    assert.match(skill, /git ls-remote origin refs\/tags\/jido-gralkor-v<version>/);
+    assert.match(skill, /Require the release tag to resolve to the release commit\./);
+  });
 
   await context.test(
     "and completion reports the version, commit, tag, tests, Hex package, and remote branch",
@@ -227,41 +223,72 @@ test("when an operator asks to publish jido_gralkor with a semantic-version chan
 
       assert.match(
         skill,
-        /Report the version, release commit, release tag, test commands, Hex package, and remote branch only after remote verification succeeds\./,
+        /Report the version, release commit, release tag, test commands, Hex package, and remote branch only after the tag verification succeeds\./,
       );
+    },
+  );
+
+  await context.test(
+    "when another session bumps the version at the same time then the higher of the two versions receives the requested change",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(
+        skill,
+        /Resolve the conflict by taking the higher of the two versions and applying the requested change to it\./,
+      );
+    },
+  );
+
+  await context.test(
+    "if another session has already published the version being released while a major, minor, or patch change was requested then the next patch version is bumped and published instead",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(skill, /For `major`, `minor`, or `patch`, return to Bump with `patch`, then restart Publish\./);
+      assert.match(
+        skill,
+        /If Hex rejects the publication because the version already exists, another session published it first\. For `major`, `minor`, or `patch`, return to Bump with `patch` and restart Publish\./,
+      );
+    },
+  );
+
+  await context.test(
+    "if another session has already published the version being released while the current version was selected then publishing reports that the version is already published and stops",
+    async () => {
+      const skill = await readFile(skillUrl, "utf8");
+
+      assert.match(skill, /For `current`, report that the version is already published, with its tag, and stop\./);
+      assert.match(skill, /For `current`, report that the version is already published and stop\./);
     },
   );
 });
 
 test("when the operator selects the current version", async (context) => {
-  await context.test(
-    "then mix.exs remains unchanged and its version is synchronized before Hex publication",
-    async () => {
-      const skill = await readFile(skillUrl, "utf8");
+  await context.test("then mix.exs remains unchanged and its existing version is published", async () => {
+    const skill = await readFile(skillUrl, "utf8");
 
-      assert.match(skill, /For `current`, do not edit `mix\.exs`\./);
-      assert.match(skill, /Use its existing `@version` as the prepared version/);
-    },
-  );
+    assert.match(skill, /For `current`, do not edit `mix\.exs`\. Continue to Publish\./);
+    assert.match(skill, /Read `@version` from `mix\.exs`\. This is the release version/);
+  });
 });
 
 test(
-  "if the version selection is invalid, a required credential is missing, the Hex token does not identify `elimydlarz`, another trunk-sync session can move the branch, the worktree contains unrelated changes, the branch is not the up-to-date remote default branch, tests fail, ownership transfer or verification fails, or the release tag already exists",
+  "if the version selection is invalid, a required credential is missing, the Hex token does not identify `elimydlarz`, ownership transfer or verification fails, the branch is not the remote default branch, or tests fail",
   async (context) => {
     await context.test("then publishing stops before changing release state", async () => {
       const skill = await readFile(skillUrl, "utf8");
 
       assert.match(skill, /Reject a version selection other than `major`, `minor`, `patch`, or `current`\./);
       assert.match(skill, /Require non-empty `HEX_TOKEN` and `GH_TOKEN` values from `<repo-root>\/\.env`\./);
+      assert.match(skill, /Require both credentials before running tests or editing files/);
       assert.match(skill, /Require the authenticated Hex user to equal `elimydlarz`\./);
       assert.match(skill, /Require the current branch to be the remote default branch\./);
-      assert.match(skill, /Require the local commit to equal the remote branch tip\./);
-      assert.match(skill, /Stop if the worktree contains changes outside the current trunk-sync session/);
-      assert.match(skill, /Require no other active trunk-sync session on the current branch/);
-      assert.match(skill, /Require both credentials before running tests or editing files/);
-      assert.match(skill, /Require `refs\/tags\/jido-gralkor-v<version>` to be absent from the remote/);
       assert.match(skill, /Do not change release state before every preflight check and test command passes\./);
-      assert.match(skill, /Stop before editing `mix\.exs` or publishing to Hex if Hex identity, ownership transfer, or ownership verification fails\./);
+      assert.match(
+        skill,
+        /Stop before editing `mix\.exs` or publishing to Hex if Hex identity, ownership transfer, or ownership verification fails\./,
+      );
     });
   },
 );
@@ -270,16 +297,24 @@ test(
   "if trunk-sync synchronization, Hex publication, GitHub tag creation, or remote verification fails",
   async (context) => {
     await context.test(
-      "then publishing stops without replacing an existing release tag and reports the exact incomplete release state",
+      "then publishing stops without retrying the Hex publication or replacing a release tag",
       async () => {
         const skill = await readFile(skillUrl, "utf8");
 
         assert.match(skill, /Fail visibly on every command error\./);
-        assert.match(skill, /Do not retry Hex publication automatically/);
-        assert.match(skill, /Never replace a local or remote release tag/);
+        assert.match(skill, /Do not retry a Hex publication automatically after an error other than "version already exists"/);
+        assert.match(skill, /Never replace a local or remote release tag\./);
+      },
+    );
+
+    await context.test(
+      "and it reports the release version, release commit, Hex result, and exact remote branch and tag state",
+      async () => {
+        const skill = await readFile(skillUrl, "utf8");
+
         assert.match(
           skill,
-          /Report the prepared version, synchronized release commit, Hex result, and exact remote branch and tag state/,
+          /Report the release version, release commit, Hex result, and exact remote branch and tag state\./,
         );
       },
     );
