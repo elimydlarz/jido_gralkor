@@ -182,17 +182,16 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
       assert Enum.map(results, & &1.destination) == [
                "personal",
                "global",
-               "generalisations",
                "first",
                "second"
              ]
 
-      for destination <- ["personal", "global", "generalisations", "first", "second"] do
+      for destination <- ["personal", "global", "first", "second"] do
         assert_receive {:destination_search, ^destination, "operator-one", "question", _opts}
       end
     end
 
-    test "and results follow the order `personal`, `global`, `generalisations`, then application Destinations" do
+    test "and results follow the order `personal`, `global`, then application Destinations" do
       Application.put_env(:jido_gralkor, :destinations, [
         [name: "first"],
         [name: "second"],
@@ -212,7 +211,7 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
         assert {:ok, results} = Client.search(request)
 
         assert Enum.map(results, & &1.destination) ==
-                 ["personal", "global", "generalisations", "first", "second", "alpha"]
+                 ["personal", "global", "first", "second", "alpha"]
       end
     end
 
