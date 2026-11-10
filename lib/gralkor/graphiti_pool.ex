@@ -2632,7 +2632,7 @@ defmodule Gralkor.GraphitiPool do
     db
   end
 
-  defp default_construct_falkor_db({:remote, kw}, socket_timeout) do
+  defp default_construct_falkor_db({:remote, kw}, socket_timeout, max_connections) do
     host = Keyword.fetch!(kw, :host)
     port = Keyword.fetch!(kw, :port)
     username = Keyword.get(kw, :username)
