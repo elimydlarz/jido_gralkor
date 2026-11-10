@@ -369,7 +369,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       refute_receive {:supervised_reflection_callback, _}
     end
 
-    test "and it installs package-owned structured definitions for the `personal`, `global`, and `generalisations` Destinations" do
+    test "and it installs package-owned structured definitions for the `personal` and `global` Destinations" do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
@@ -380,8 +380,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
 
       assert Enum.map(JidoGralkor.Runtime.destinations(agent_server), & &1.name) == [
                "personal",
-               "global",
-               "generalisations"
+               "global"
              ]
     end
 
@@ -398,25 +397,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
                ontology: Gralkor.DefaultOntology,
                ingestion: Gralkor.Lens.Ingestion.Store
              } = JidoGralkor.Runtime.lens!(agent_server, "personal-chat")
-    end
-
-    test "and it installs package-owned structured definitions for the generalisations and ERL Reflections" do
-      agent_server =
-        start_supervised!(
-          {Jido.AgentServer,
-           agent: ConsumerAgent,
-           id: "runtime-configuration-packaged-reflections",
-           register_global: false}
-        )
-
-      for name <- ["generalisations", "erl"] do
-        assert %Gralkor.Reflection{
-                 name: ^name,
-                 chain_of_thought: %Gralkor.Reflection.ChainOfThought{
-                   steps: [_ | _]
-                 }
-               } = JidoGralkor.Runtime.reflection!(agent_server, name)
-      end
     end
 
     test "and it installs the complete consumer configuration supplied when the agent started" do
@@ -511,7 +491,7 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
              } = JidoGralkor.Runtime.reflection!(agent_server, "review")
     end
 
-    test "and the packaged Destinations, Lens, and Reflections remain active" do
+    test "and the packaged Destinations and Lens remain active" do
       agent_server =
         start_supervised!(
           {Jido.AgentServer,
@@ -532,17 +512,8 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       assert %Gralkor.Destination{name: "global"} =
                JidoGralkor.Runtime.destination!(agent_server, "global")
 
-      assert %Gralkor.Destination{name: "generalisations"} =
-               JidoGralkor.Runtime.destination!(agent_server, "generalisations")
-
       assert %Gralkor.Lens{name: "personal-chat"} =
                JidoGralkor.Runtime.lens!(agent_server, "personal-chat")
-
-      assert %Gralkor.Reflection{name: "generalisations"} =
-               JidoGralkor.Runtime.reflection!(agent_server, "generalisations")
-
-      assert %Gralkor.Reflection{name: "erl"} =
-               JidoGralkor.Runtime.reflection!(agent_server, "erl")
     end
 
     test "and another agent's runtime configuration remains unchanged" do
@@ -1278,7 +1249,6 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
       for {collection, name} <- [
             {:destinations, "personal"},
             {:destinations, "global"},
-            {:destinations, "generalisations"},
             {:lenses, "personal-chat"},
             {:lenses, "global"}
           ] do
@@ -1294,54 +1264,12 @@ defmodule Gralkor.RuntimeConfigurationFunctionalTest do
         assert JidoGralkor.Runtime.snapshot(self()) == active
       end
 
-      for name <- ["personal", "global", "generalisations"] do
+      for name <- ["personal", "global"] do
         assert %Gralkor.Destination{name: ^name} = JidoGralkor.Runtime.destination!(self(), name)
       end
 
       assert %Gralkor.Lens{ingestion: Gralkor.Lens.Ingestion.Store} =
                JidoGralkor.Runtime.lens!(self(), "personal-chat")
-    end
-  end
-
-  describe "if a consumer Lens or Reflection writes to the packaged `generalisations` Destination" do
-    test "then validation rejects it before activating it" do
-      active = %{destinations: [%{name: "consumer-memory"}], lenses: [], reflections: []}
-      start_supervised!({JidoGralkor.Runtime, owner: self(), configuration: active})
-
-      lens = %{
-        name: "generalising",
-        destination: "generalisations",
-        ingestion: Gralkor.Lens.Ingestion.Store
-      }
-
-      reflection = %{
-        name: "generalising",
-        outputs: [%{kind: :destination, destination: "generalisations"}],
-        chain_of_thought: %{
-          steps: [
-            %{label: "review", directions: "Review.", output: %{"summary" => "string"}}
-          ]
-        }
-      }
-
-      for {collection, definition} <- [
-            {:lenses, lens},
-            {:reflections, reflection}
-          ] do
-        config =
-          %{destinations: [], lenses: [], reflections: []} |> Map.put(collection, [definition])
-
-        assert {:error, {:exclusive_destination, ^collection, "generalising", "generalisations"}} =
-                 JidoGralkor.Runtime.validate(config)
-
-        assert {:error, {:exclusive_destination, ^collection, "generalising", "generalisations"}} =
-                 JidoGralkor.Runtime.replace(self(), config)
-
-        assert JidoGralkor.Runtime.snapshot(self()) == active
-      end
-
-      assert [%{destination: %Gralkor.Destination{name: "generalisations"}}] =
-               JidoGralkor.Runtime.reflection!(self(), "generalisations").outputs
     end
   end
 
