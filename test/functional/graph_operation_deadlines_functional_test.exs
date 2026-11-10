@@ -384,8 +384,8 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
     parent = self()
 
     application_pool_opts()
-    |> Keyword.put(:construct_falkor_db, fn spec, socket_timeout ->
-      send(parent, {:constructed_falkordb, spec, socket_timeout})
+    |> Keyword.put(:construct_falkor_db, fn spec, socket_timeout, max_connections ->
+      send(parent, {:constructed_falkordb, spec, socket_timeout, max_connections})
       :stub_falkor_db
     end)
     |> Keyword.put(:construct_instance, fn _database, _shared, _group_id -> nil end)
