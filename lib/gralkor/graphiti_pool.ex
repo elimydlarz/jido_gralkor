@@ -2668,7 +2668,9 @@ defmodule Gralkor.GraphitiPool do
         p = password.decode('utf-8') if isinstance(password, (bytes, bytearray)) else password
 
         # Builds no connection; it only resolves the connection settings
-        # (SSL included) that the waiting pool reuses.
+        # (SSL included) that the waiting pool reuses, as FalkorDB(...) would
+        # (retry=None: falkordb's cluster probe hands these settings to a
+        # synchronous client, which cannot use redis's async default Retry).
         settings = aioredis.Redis(
             host=h,
             port=port,
@@ -2678,6 +2680,7 @@ defmodule Gralkor.GraphitiPool do
             socket_timeout=socket_timeout,
             socket_connect_timeout=socket_timeout,
             decode_responses=True,
+            retry=None,
         ).connection_pool
 
         FalkorDB(
