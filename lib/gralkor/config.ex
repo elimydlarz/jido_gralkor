@@ -195,6 +195,30 @@ defmodule Gralkor.Config do
   end
 
   @doc """
+  Resolve the most connections the remote FalkorDB client opens at once.
+  """
+  @spec remote_falkordb_max_connections() :: pos_integer()
+  def remote_falkordb_max_connections do
+    :jido_gralkor
+    |> Application.get_env(
+      :remote_falkordb_max_connections,
+      @default_remote_falkordb_max_connections
+    )
+    |> validate_remote_falkordb_max_connections!()
+  end
+
+  @doc false
+  @spec validate_remote_falkordb_max_connections!(term()) :: pos_integer()
+  def validate_remote_falkordb_max_connections!(value)
+      when is_integer(value) and value > 0,
+      do: value
+
+  def validate_remote_falkordb_max_connections!(value) do
+    raise ArgumentError,
+          ":remote_falkordb_max_connections must be a positive integer, got #{inspect(value)}"
+  end
+
+  @doc """
   Resolve the deadline, in milliseconds, for one call across the Python bridge.
   """
   @spec graph_operation_deadline_ms() :: pos_integer()
