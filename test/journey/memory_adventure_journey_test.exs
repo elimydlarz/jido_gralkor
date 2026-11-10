@@ -253,18 +253,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       assert adventure.appended_information
     end
 
-    test "and ERL writes a structured Learning artefact through its Destination output", %{
-      adventure: adventure
-    } do
-      assert adventure.erl_learning
-    end
-
-    test "and ERL remains absent from the other operator's personal Destination", %{
-      adventure: adventure
-    } do
-      refute adventure.erl_visible_to_other_operator
-    end
-
     test "and the global graph is visible to both operators", %{adventure: adventure} do
       assert adventure.global_for_first_operator
       assert adventure.global_for_second_operator
@@ -297,73 +285,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when the Journey consumer triggers generalisation after successive ingestions containing related observations" do
-    test "then the first resulting generalisation exposes non-blank content, an integer level, and a lineage list",
-         %{adventure: adventure} do
-      assert %{
-               "content" => content,
-               "level" => level,
-               "evolves_from" => lineage
-             } = adventure.first_generalisation
-
-      assert is_binary(content) and content != ""
-      assert is_integer(level)
-      assert is_list(lineage)
-    end
-
-    test "and a later resulting generalisation exposes non-blank content, an integer level, and non-empty lineage",
-         %{
-           adventure: adventure
-         } do
-      assert %{
-               "content" => content,
-               "level" => level,
-               "evolves_from" => [_ | _]
-             } = adventure.later_generalisation
-
-      assert is_binary(content) and content != ""
-      assert is_integer(level)
-    end
-
-    test "and every later lineage snapshot exposes non-blank content and an integer level",
-         %{adventure: adventure} do
-      assert %{"evolves_from" => preceding_generalisations} =
-               adventure.later_generalisation
-
-      assert preceding_generalisations != []
-
-      assert Enum.all?(preceding_generalisations, fn
-               %{"content" => content, "level" => level} ->
-                 is_binary(content) and content != "" and is_integer(level)
-
-               _ ->
-                 false
-             end)
-    end
-
-    test "and later generalisation inference receives each prior generalisation in the memory search format with its level",
-         %{adventure: adventure} do
-      %{"content" => content, "level" => level} = adventure.first_generalisation
-      assert [_ | _] = adventure.later_generalisation_prompts
-
-      for prompt <- adventure.later_generalisation_prompts do
-        stored = stored_information_section(prompt)
-
-        assert stored =~
-                 ~r/Reflection: generalisations\n(?:.*\n)*?- #{Regex.escape(squish(content))}[^\n]*\n  level: #{level}(?:\n|$)/
-
-        refute stored =~ ~s("level")
-        assert {:error, _} = Jason.decode(stored)
-      end
-    end
-
-    test "and the later generalisation's level is one above the highest level in its lineage",
-         %{adventure: adventure} do
-      %{"level" => level, "evolves_from" => lineage} = adventure.later_generalisation
-      assert level == Enum.max(Enum.map(lineage, & &1["level"])) + 1
-    end
-  end
-
   describe "when distinct ingestions use Lenses backed by different Destinations" do
     test "then the `work-notes` input is searchable through the `personal` Destination", %{
       adventure: adventure
@@ -375,55 +296,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       adventure: adventure
     } do
       assert adventure.published_input_at_global
-    end
-
-    test "and each consumer-supplied invocation identifier resolves a completed artefact of the `generalisations` Reflection",
-         %{
-           adventure: adventure
-         } do
-      assert %Artefact{id: work_notes_artefact_id} = adventure.work_notes_generalisation_artefact
-      assert %Artefact{id: published_artefact_id} = adventure.published_generalisation_artefact
-
-      assert work_notes_artefact_id ==
-               Artefact.id_for(
-                 @operator_one,
-                 "journey-generalisation-level-one",
-                 "generalisations"
-               )
-
-      assert published_artefact_id ==
-               Artefact.id_for(@operator_one, "journey-published-policy", "generalisations")
-    end
-
-    test "and each completed generalisation artefact is searchable through the `generalisations` Destination by both operators",
-         %{adventure: adventure} do
-      expected = [
-        adventure.work_notes_generalisation_artefact,
-        adventure.published_generalisation_artefact
-      ]
-
-      for operator <- [@operator_one, @operator_two] do
-        assert Map.fetch!(adventure.generalisations_destination_artefacts, operator) == expected
-      end
-    end
-
-    test "and no generalisation artefact is searchable through the `global` Destination",
-         %{adventure: adventure} do
-      assert adventure.global_artefact_searches != []
-
-      for %{episode: episode} <- adventure.global_artefact_searches do
-        refute Map.get(episode, :reflection) == "generalisations"
-      end
-
-      generalisation_ids = [
-        adventure.work_notes_generalisation_artefact.id,
-        adventure.published_generalisation_artefact.id
-      ]
-
-      refute Enum.any?(adventure.global_artefact_searches, fn
-               %{episode: %{artefact: %{id: id}}} -> id in generalisation_ids
-               _ -> false
-             end)
     end
   end
 
@@ -448,7 +320,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
-  describe "when a fresh agent handles a request related to an evolved generalisation" do
+  describe "when a fresh agent handles a request related to stored deployment lessons" do
     test "then one MemorySearch call is made without selectors", %{adventure: adventure} do
       assert adventure.memory_search_completion_count == 1
       assert adventure.memory_search_arguments[:destinations] in [nil, []]
@@ -456,7 +328,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     test "and every accessible registered Destination is searched", %{adventure: adventure} do
       assert MapSet.new(adventure.default_memory_search_destinations) ==
-               MapSet.new(["personal", "global", "generalisations", "operations"])
+               MapSet.new(["personal", "global", "operations"])
     end
 
     test "and its results include relevant memory from the `personal`, `global`, and an application Destination",
@@ -476,41 +348,9 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
              )
     end
 
-    test "and its results include relevant Lens-authored memory and relevant stored generalisations, as facts or whole episodes",
-         %{adventure: adventure} do
-      assert has_originating_lens?(
-               adventure.default_memory_search,
-               "personal",
-               "work-notes"
-             )
-
-      assert has_declaring_reflection?(
-               adventure.default_memory_search,
-               "generalisations",
-               "generalisations"
-             ) or
-               has_generalisation_artefact?(adventure.default_memory_search_artefacts)
-    end
-
-    test "and its readable memory names the originating Lens or Reflection",
+    test "and its readable memory names the originating Lens",
          %{adventure: adventure} do
       assert adventure.memory_search_text =~ "Lens: work-notes\n- "
-      assert adventure.memory_search_text =~ "Reflection: generalisations\n- "
-    end
-
-    test "and its readable memory shows each retrieved generalisation's level and lineage snapshots as indented fields",
-         %{adventure: adventure} do
-      generalisations =
-        for %{destination: "generalisations", artefact: %{payload: payload}} <-
-              adventure.default_memory_search_artefacts,
-            generalisation <- Map.get(payload, "generalisations", []),
-            do: generalisation
-
-      assert Enum.any?(generalisations, &match?(%{"evolves_from" => [_ | _]}, &1))
-
-      for generalisation <- generalisations do
-        assert adventure.memory_search_text =~ rendered_generalisation(generalisation)
-      end
     end
 
     test "and the answer uses retrieved facts relevant to the requested migration",
@@ -724,21 +564,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
                %{agent_id: @operator_two, gralkor_runtime: agent}
              )
 
-    {first_generalisation, later_generalisation, work_notes_generalisation_artefact,
-     later_generalisation_prompts} =
-      evolve_shared_generalisation(agent)
-
-    assert %Artefact{} =
-             destination_artefact_until(
-               agent,
-               @operator_one,
-               "generalisations",
-               Artefact.id_for(
-                 @operator_one,
-                 "journey-generalisation-level-two",
-                 "generalisations"
-               )
-             )
+    ingest_deployment_reviews(agent)
 
     implicit_episodes =
       search_until(
@@ -816,22 +642,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       )
       |> Enum.filter(&contains_episode?([&1], "harbor"))
 
-    _erl_artefact =
-      invoke_reflection!(
-        agent,
-        "erl",
-        @operator_one,
-        "journey-erl-learning",
-        [
-          %{
-            id: "journey-erl-learning-representation",
-            lens: "work-notes",
-            content: appended_fact,
-            result: :ok
-          }
-        ]
-      )
-
     published_request = %Ingest{
       id: "journey-published-policy",
       operator_id: @operator_one,
@@ -843,15 +653,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     assert {:ok, published_representations} =
              Client.ingest_with_representation(agent, published_request)
-
-    published_generalisation_artefact =
-      invoke_reflection!(
-        agent,
-        "generalisations",
-        @operator_one,
-        "journey-published-policy",
-        published_representations
-      )
 
     consumer_reflection_result =
       invoke_reflection_result!(
@@ -981,20 +782,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         &contains_episode?(&1, "kestrel")
       )
 
-    erl_artefacts =
-      search_until(
-        agent,
-        @operator_one,
-        ["personal"],
-        :artefacts,
-        "backup vacuum scheduling conflict",
-        &(&1 != []),
-        120
-      )
-
-    other_operator_erl =
-      search(agent, @operator_two, ["personal"], :artefacts, "backup vacuum scheduling conflict")
-
     conversation_facts =
       attributed_facts(
         agent,
@@ -1035,26 +822,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         "system dependency registry"
       )
 
-    generalisation_artefact_ids = [
-      work_notes_generalisation_artefact.id,
-      published_generalisation_artefact.id
-    ]
-
-    generalisations_destination_artefacts =
-      Map.new([@operator_one, @operator_two], fn operator ->
-        {operator,
-         Enum.map(
-           generalisation_artefact_ids,
-           &destination_artefact_until(agent, operator, "generalisations", &1)
-         )}
-      end)
-
-    global_artefact_searches =
-      Enum.flat_map(
-        generalisation_artefact_ids ++ ["Atlas Deployment requires Rollback Checkpoint"],
-        &search(agent, @operator_one, ["global"], :episodes, &1)
-      )
-
     lens_query = "Backup Vacuum 02:00 Juniper Muscat Cedar Amman Harbor Thursday"
 
     work_notes_lens_search =
@@ -1073,18 +840,13 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       end)
 
     %{
-      generalisations_destination_artefacts: generalisations_destination_artefacts,
-      global_artefact_searches: global_artefact_searches,
       work_notes_lens_search: work_notes_lens_search,
       lens_free_search: lens_free_search,
       implicit_memory: contains_all?(implicit_memory, ["juniper", "muscat"]),
       recall_text: implicit_memory,
-      later_generalisation_prompts: later_generalisation_prompts,
       direct_conversation_episodes: direct_conversation_episodes,
       personal_chat_episodes: personal_chat_episodes,
-      erl_visible_to_other_operator: learning_artefact?(other_operator_erl),
       appended_information: contains_episode?(shared_episodes, "backup"),
-      erl_learning: learning_artefact?(erl_artefacts),
       global_for_first_operator: contains_episode?(global_for_first, "rollback"),
       global_for_second_operator: contains_episode?(global_for_second, "rollback"),
       first_operator_own_local_information: contains_episode?(private_for_first, "juniper"),
@@ -1093,12 +855,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       second_operator_other_local_information: contains_episode?(private_for_second, "juniper"),
       implicit_default_operator_graph: contains_episode?(implicit_episodes, "juniper"),
       appending_operator_graph: contains_episode?(shared_episodes, "backup"),
-      first_generalisation: first_generalisation,
-      later_generalisation: later_generalisation,
       work_notes_input_at_operator: contains_episode?(work_notes_input, "aurora"),
       published_input_at_global: contains_episode?(global_for_first, "rollback"),
-      work_notes_generalisation_artefact: work_notes_generalisation_artefact,
-      published_generalisation_artefact: published_generalisation_artefact,
       consumer_destination_artefact: consumer_destination_artefact,
       consumer_returned_artefact: consumer_returned_artefact,
       consumer_reflection_outcome: consumer_reflection_result.outcome,
@@ -1117,9 +875,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     }
   end
 
-  defp evolve_shared_generalisation(agent) do
-    first_ingestion_id = "journey-generalisation-level-one"
-
+  defp ingest_deployment_reviews(agent) do
     first_report = """
     The Payments Deployment requires the Rollback Checkpoint before release.
     Aurora's incident review found that the Rollback Checkpoint caught a Payments
@@ -1129,127 +885,33 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     rollout. This is the observed Payments deployment policy.
     """
 
-    assert {:ok, first_representations} =
-             Client.ingest_with_representation(agent, %Ingest{
-               id: first_ingestion_id,
-               operator_id: @operator_one,
-               lens: "work-notes",
-               source_kind: :document,
-               content: first_report,
-               source_description: "Aurora canary deployment review"
-             })
-
-    first_generalisation_artefact =
-      invoke_reflection!(
-        agent,
-        "generalisations",
-        @operator_one,
-        first_ingestion_id,
-        first_representations
-      )
-
-    first_generalisation =
-      first_generalisation_artefact
-      |> find_generalisation(fn generalisation ->
-        is_binary(generalisation["content"]) and generalisation["content"] != "" and
-          is_integer(generalisation["level"]) and is_list(generalisation["evolves_from"])
-      end)
-
-    assert %{"content" => first_content} = first_generalisation
-    assert is_binary(first_content) and first_content != ""
-
-    later_ingestion_id = "journey-generalisation-level-two"
-
     later_report = """
-    A later operational review extends this preceding stored generalisation:
-    #{first_content}
-
-    The same Payments policy now extends beyond deployments. The Payments Database
-    Migration and Payments Feature Release also require the Rollback Checkpoint.
-    Both avoided customer-impacting failures by starting with reversible limited-scope
-    trials at that checkpoint. The observed policy now applies to Payments deployments,
-    database migrations, and feature releases: each requires the Rollback Checkpoint
-    to expose faults in a reversible limited-scope trial before broad impact.
+    A later operational review found that the same Payments policy extends beyond
+    deployments. The Payments Database Migration and Payments Feature Release also
+    require the Rollback Checkpoint. Both avoided customer-impacting failures by
+    starting with reversible limited-scope trials at that checkpoint. The observed
+    policy now applies to Payments deployments, database migrations, and feature
+    releases: each requires the Rollback Checkpoint to expose faults in a
+    reversible limited-scope trial before broad impact.
     """
 
-    assert first_generalisation_artefact ==
-             destination_artefact_until(
-               agent,
-               @operator_one,
-               "generalisations",
-               first_generalisation_artefact.id
-             )
-
-    assert {:ok, later_representations} =
-             Client.ingest_with_representation(agent, %Ingest{
-               id: later_ingestion_id,
-               operator_id: @operator_one,
-               lens: "work-notes",
-               source_kind: :document,
-               content: later_report,
-               source_description: "cross-domain reversible change review"
-             })
-
-    prompt_ref = make_ref()
-
-    later_generalisation_artefact =
-      invoke_reflection!(
-        agent,
-        "generalisations",
-        @operator_one,
-        later_ingestion_id,
-        later_representations,
-        inference: recording_built_in_inference(self(), prompt_ref)
-      )
-
-    later_generalisation_prompts = received_prompts(prompt_ref)
-
-    later_generalisation =
-      find_generalisation(later_generalisation_artefact, fn generalisation ->
-        is_binary(generalisation["content"]) and generalisation["content"] != "" and
-          is_integer(generalisation["level"]) and
-          match?([_ | _], generalisation["evolves_from"])
-      end)
-
-    {first_generalisation, later_generalisation, first_generalisation_artefact,
-     later_generalisation_prompts}
-  end
-
-  # The real built-in inference and model, observed: each step's prompt is reported
-  # to the test before the Runner's unchanged Jido ReAct run sends it to the provider.
-  defp recording_built_in_inference(test_pid, prompt_ref) do
-    fn request ->
-      Gralkor.Reflection.Runner.default_inference(request, fn prompt, config, opts ->
-        send(test_pid, {prompt_ref, prompt})
-        Gralkor.Reflection.Runner.react(prompt, config, opts)
-      end)
+    for {id, content, source_description} <- [
+          {"journey-deployment-review", first_report, "Aurora canary deployment review"},
+          {"journey-reversible-change-review", later_report,
+           "cross-domain reversible change review"}
+        ] do
+      assert :ok =
+               Client.ingest(agent, %Ingest{
+                 id: id,
+                 operator_id: @operator_one,
+                 lens: "work-notes",
+                 source_kind: :document,
+                 content: content,
+                 source_description: source_description
+               })
     end
-  end
 
-  defp received_prompts(prompt_ref) do
-    receive do
-      {^prompt_ref, prompt} -> [prompt | received_prompts(prompt_ref)]
-    after
-      0 -> []
-    end
-  end
-
-  defp invoke_reflection!(
-         agent,
-         reflection_name,
-         operator_id,
-         invocation_id,
-         representations,
-         opts \\ []
-       ) do
-    invoke_reflection_result!(
-      agent,
-      reflection_name,
-      operator_id,
-      invocation_id,
-      representations,
-      opts
-    ).artefact
+    :ok
   end
 
   defp invoke_reflection_result!(
@@ -1301,13 +963,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         destination_artefact_until(agent, operator_id, destination, artefact_id, attempts - 1)
     end
   end
-
-  defp find_generalisation(%{payload: %{"generalisations" => generalisations}}, predicate)
-       when is_list(generalisations) do
-    Enum.find(generalisations, predicate)
-  end
-
-  defp find_generalisation(_artefact, _predicate), do: nil
 
   defp search(agent, operator_id, destinations, kind, query) do
     assert {:ok, results} =
@@ -1486,19 +1141,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end)
   end
 
-  defp has_generalisation_artefact?(artefacts) do
-    Enum.any?(artefacts, fn %{destination: destination, artefact: artefact} ->
-      destination == "generalisations" and Map.has_key?(artefact.payload, "generalisations")
-    end)
-  end
-
-  defp has_declaring_reflection?(results, destination, reflection) do
-    Enum.any?(results, fn %{destination: selected, fact: fact} ->
-      selected == destination and
-        Enum.any?(Map.get(fact, :sources, []), &(Map.get(&1, :reflection) == reflection))
-    end)
-  end
-
   defp facts_matching_text(agent, operator, params, text) do
     agent |> results_matching_text(operator, params, text) |> flatten(:facts)
   end
@@ -1518,35 +1160,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
 
     results
   end
-
-  defp stored_information_section(prompt) do
-    [_, rest] =
-      String.split(prompt, "Related stored information available to this Reflection step:\n",
-        parts: 2
-      )
-
-    rest |> String.split("\n\nReturn only one JSON object", parts: 2) |> hd()
-  end
-
-  # How the formatter lays out one generalisation: its content, then its level,
-  # then each lineage snapshot as a nested bullet with its own level.
-  defp rendered_generalisation(%{"content" => content, "level" => level} = generalisation) do
-    lineage =
-      case Map.get(generalisation, "evolves_from", []) do
-        [] ->
-          ""
-
-        snapshots ->
-          "\n  evolves_from:" <>
-            Enum.map_join(snapshots, fn %{"content" => content, "level" => level} ->
-              "\n  - #{squish(content)}\n    level: #{level}"
-            end)
-      end
-
-    ~r/- #{Regex.escape(squish(content))}[^\n]*\n  level: #{level}#{Regex.escape(lineage)}(?:\n|\z)/
-  end
-
-  defp squish(text), do: text |> String.split() |> Enum.join(" ")
 
   defp answer_field!(answer, label) do
     labels = "RECOMMENDATION|RATIONALE"
@@ -1650,19 +1263,6 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
   defp contains_all?(text, expected) do
     text = String.downcase(text)
     Enum.all?(expected, &String.contains?(text, &1))
-  end
-
-  defp learning_artefact?(results) do
-    Enum.any?(results, fn
-      %{artefact: %{payload: payload}} ->
-        is_binary(payload["problem_kind"]) and
-          is_binary(payload["approach"]) and
-          is_boolean(payload["success"]) and
-          is_binary(payload["lesson"])
-
-      _ ->
-        false
-    end)
   end
 
   defp transcript(messages), do: Distill.format_transcript([messages], "Susu", "Eli")
