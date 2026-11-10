@@ -76,6 +76,20 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
     end
   end
 
+  describe "if `:remote_falkordb_max_connections` is not a positive integer" do
+    test "then application startup raises naming the setting and its offending value" do
+      use_remote_application_backend()
+
+      Enum.each([0, -1, "100"], fn invalid ->
+        put_env_restored(:remote_falkordb_max_connections, invalid)
+
+        assert_raise ArgumentError,
+                     ~r/remote_falkordb_max_connections.*#{Regex.escape(inspect(invalid))}/,
+                     fn -> Gralkor.Application.children() end
+      end)
+    end
+  end
+
   describe "when the runtime starts > while no graph operation deadline is configured" do
     test "then graph operations use a thirty-minute deadline" do
       use_remote_application_backend()
