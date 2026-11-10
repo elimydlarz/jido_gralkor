@@ -99,13 +99,6 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
       assert [%{destination: %Gralkor.Destination{name: "global"}}] = reflection.outputs
     end
-
-    test "and generalisations reference the Destination named `generalisations`" do
-      configured_reflections!([reflection_definition()])
-
-      assert [%{destination: %Gralkor.Destination{name: "generalisations"}}] =
-               Runtime.reflection!(self(), "generalisations").outputs
-    end
   end
 
   describe "when multiple Lenses or Reflections reference the same Destination" do
@@ -371,45 +364,6 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
     end
   end
 
-  describe "if an application Lens or Reflection references the packaged `generalisations` Destination" do
-    test "then configuration resolution raises `ArgumentError` identifying the Lens or Reflection" do
-      generalising_lens = [
-        name: "observations",
-        destination: "generalisations",
-        ontology: MemoryOntology,
-        ingestion: StoreIngestion
-      ]
-
-      Application.put_env(:jido_gralkor, :lenses, [generalising_lens])
-
-      assert_raise ArgumentError, ~r/observations.*generalisations/, fn ->
-        Client.lens!("observations")
-      end
-
-      assert_raise ArgumentError,
-                   ~r/\{:exclusive_destination, :lenses, "observations", "generalisations"\}/,
-                   fn ->
-                     mount!(runtime_configuration([[name: "shared"]], [generalising_lens]))
-                   end
-
-      assert_raise ArgumentError,
-                   ~r/\{:exclusive_destination, :reflections, "review", "generalisations"\}/,
-                   fn ->
-                     configured_reflections!([
-                       reflection_definition(
-                         outputs: [
-                           [
-                             kind: :destination,
-                             destination: "generalisations",
-                             ontology: MemoryOntology
-                           ]
-                         ]
-                       )
-                     ])
-                   end
-    end
-  end
-
   describe "if the application registers the retired operator Destination" do
     test "then configuration resolution identifies personal as its replacement before any memory operation" do
       Application.put_env(:jido_gralkor, :destinations, [[name: "operator"]])
@@ -426,7 +380,7 @@ defmodule Gralkor.DestinationRegistrationFunctionalTest do
 
   describe "if the application registers a Destination with a packaged name" do
     test "then configuration resolution refuses to replace the packaged Destination" do
-      for name <- ["personal", "global", "generalisations"] do
+      for name <- ["personal", "global"] do
         Application.put_env(:jido_gralkor, :destinations, [[name: name]])
 
         assert_raise ArgumentError, ~r/(reserved|duplicate).*#{name}|#{name}.*reserved/, fn ->
