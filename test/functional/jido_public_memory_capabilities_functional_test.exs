@@ -135,7 +135,7 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
          %{
            agent_name: "Deterministic Memory Agent",
            runtime_config: %{
-             destinations: [],
+             destinations: [%{name: "generalisations"}],
              lenses: [
                %{
                  name: "observations",
@@ -183,7 +183,8 @@ defmodule JidoGralkor.PublicMemoryCapabilitiesFunctionalTest do
 
     Application.put_env(:jido_gralkor, :destinations, [
       [name: "observations"],
-      [name: "decisions"]
+      [name: "decisions"],
+      [name: "generalisations"]
     ])
 
     Application.put_env(
