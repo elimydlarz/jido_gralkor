@@ -136,6 +136,7 @@ Publish jido_gralkor to Hex, and create its release tag, only through the publis
 - It loads `HEX_TOKEN` and `GH_TOKEN` from `.env` and publishes with `HEX_API_KEY` in a temporary `HEX_HOME`, so it needs no interactive Hex login or one-time password.
 - Never run a bare `mix hex.publish`. It uses the cached CLI session, which expires and then asks for a one-time password.
 - Never create a tag with `git tag` or `git push`. The skill creates it through GitHub's API.
+- Never wait for other sessions. Whichever session gets there first bumps and publishes; a later session bumps and publishes again.
 
 ## Test Trees
 
