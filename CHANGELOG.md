@@ -1,5 +1,10 @@
 # Changelog
 
+## [19.1.0] - 2026-11-11
+
+### Added
+- **`Gralkor.Reflection.Runner.run/3` accepts `:reasoning_effort`.** With built-in inference, every model call of every step asks the model for that reasoning effort (`:low`, `:medium`, `:high`, or any value ReqLLM accepts for the provider). Without it no reasoning effort is named, so the provider's default applies, as before.
+
 ## [19.0.0] - 2026-11-10
 
 jido_gralkor no longer packages any Reflections. The packaged `generalisations` and `erl` Reflections, the `generalisations` Destination that only the packaged generalisation Reflection could write, the `Gralkor.Reflection.ERLOntology` ontology, and the Reflection Runner's generalisation pre-search are removed. Every Reflection an agent runs is now one its consumer declares in `runtime_config.reflections`. Lenses, consumer Reflections, search, memory search, recall, and everything else are unchanged.
