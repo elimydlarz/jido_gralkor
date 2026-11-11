@@ -580,6 +580,19 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
   end
 
+  describe "when built-in inference is invoked for a step > where a reasoning effort is supplied" do
+    test "then every model call asks the model for that reasoning effort" do
+      assert built_in_config(default_inference_request(), reasoning_effort: :low).llm_opts ==
+               [reasoning_effort: :low]
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > where no reasoning effort is supplied" do
+    test "then no model call names a reasoning effort" do
+      refute Map.has_key?(built_in_config(default_inference_request(), []), :llm_opts)
+    end
+  end
+
   describe "when built-in inference is invoked for a step > if the provider fails or returns invalid JSON or a non-object JSON value" do
     test "then built-in inference returns the identified error" do
       prove_built_in_inference_errors()
