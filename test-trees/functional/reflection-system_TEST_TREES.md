@@ -122,6 +122,10 @@ when a Chain of Thought step begins
     then built-in inference runs the model that resolver names
   where the Runner is given no model resolver
     then built-in inference runs Gralkor's configured LLM model
+  where the Runner is given a reasoning effort
+    then built-in inference asks the model for that reasoning effort
+  where the Runner is given no reasoning effort
+    then built-in inference names no reasoning effort
 
   where the directions reference outputs from earlier steps
     then every referenced value is interpolated from the Chain of Thought's shared output space
