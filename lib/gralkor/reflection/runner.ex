@@ -11,7 +11,7 @@ defmodule Gralkor.Reflection.Runner do
   def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
     inference =
       Keyword.get_lazy(opts, :inference, fn ->
-        built_in = Keyword.take(opts, [:model_resolver, :observer])
+        built_in = Keyword.take(opts, [:model_resolver, :observer, :reasoning_effort])
 
         run_step = if built_in[:observer], do: &observed_react/3, else: &react/3
 
@@ -207,17 +207,21 @@ defmodule Gralkor.Reflection.Runner do
 
     context = Map.put(request.tool_context, :operator_id, request.operator_id)
 
-    config = %{
-      model: model_spec,
-      tools: request.tools,
-      streaming: false,
-      max_iterations: 10,
-      max_tokens: @max_output_tokens,
-      temperature: 0.7,
-      tool_concurrency: 1,
-      tool_max_retries: 0,
-      tool_timeout_ms: 30_000
-    }
+    config =
+      reasoning_effort(
+        %{
+          model: model_spec,
+          tools: request.tools,
+          streaming: false,
+          max_iterations: 10,
+          max_tokens: @max_output_tokens,
+          temperature: 0.7,
+          tool_concurrency: 1,
+          tool_max_retries: 0,
+          tool_timeout_ms: 30_000
+        },
+        Keyword.fetch(opts, :reasoning_effort)
+      )
 
     react_opts = [context: context] ++ event_observer(opts)
 
@@ -227,6 +231,11 @@ defmodule Gralkor.Reflection.Runner do
       %{termination_reason: termination_reason} -> {:error, termination_reason}
     end
   end
+
+  defp reasoning_effort(config, {:ok, effort}),
+    do: Map.put(config, :llm_opts, reasoning_effort: effort)
+
+  defp reasoning_effort(config, :error), do: config
 
   defp run_until_settled(run_step, input, config, react_opts, delays) do
     case {run_step.(input, config, react_opts), delays} do
