@@ -772,6 +772,19 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when a Chain of Thought step begins > where the Runner is given a reasoning effort" do
+    test "then built-in inference asks the model for that reasoning effort" do
+      assert step_config(step_request(), reasoning_effort: :low).llm_opts ==
+               [reasoning_effort: :low]
+    end
+  end
+
+  describe "when a Chain of Thought step begins > where the Runner is given no reasoning effort" do
+    test "then built-in inference names no reasoning effort" do
+      refute Map.has_key?(step_config(step_request(), []), :llm_opts)
+    end
+  end
+
   describe "when a Chain of Thought step begins > where the directions reference outputs from earlier steps" do
     test "then every referenced value is interpolated from the Chain of Thought's shared output space",
          context do
@@ -1948,6 +1961,21 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     assert {:ok, %{output: %{"artefact" => "done"}}} = Runner.default_inference(request, call)
     assert_receive {:step_call, observed}
     observed
+  end
+
+  defp step_config(request, opts) do
+    parent = self()
+
+    call = fn _prompt, config, _opts ->
+      send(parent, {:step_config, config})
+      %{termination_reason: :final_answer, result: ~s({"artefact":"done"})}
+    end
+
+    assert {:ok, %{output: %{"artefact" => "done"}}} =
+             Runner.default_inference(request, call, opts)
+
+    assert_receive {:step_config, config}
+    config
   end
 
   defp register_step(directions, representations, schema, turns) do
