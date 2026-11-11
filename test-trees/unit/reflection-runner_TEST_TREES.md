@@ -61,6 +61,10 @@ when built-in inference is invoked for a step
     then it runs the model that resolver names
   where no model resolver is supplied
     then it runs Gralkor's configured LLM model
+  where a reasoning effort is supplied
+    then every model call asks the model for that reasoning effort
+  where no reasoning effort is supplied
+    then no model call names a reasoning effort
   if the provider fails or returns invalid JSON or a non-object JSON value
     then built-in inference returns the identified error
   if the ReAct runtime ends without a final answer
