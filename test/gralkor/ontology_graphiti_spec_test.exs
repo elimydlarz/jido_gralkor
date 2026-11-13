@@ -158,6 +158,67 @@ defmodule Gralkor.OntologyGraphitiSpecTest do
     end
   end
 
+  describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected entity type carries a field with a maximum length" do
+    test "then that field's entry carries `\"max_length\" =>` that length" do
+      spec =
+        GraphitiPool.graphiti_boundary_spec(
+          payload(%{
+            entity_types: [
+              %{
+                name: "Lesson",
+                fields: [
+                  %{name: :approach, type: :string, required: false, doc: nil, max_length: 1000}
+                ]
+              }
+            ]
+          })
+        )
+
+      [%{"fields" => [field]}] = spec[:entity_types]
+      assert field["max_length"] == 1000
+    end
+  end
+
+  describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected edge type carries a field with a maximum length" do
+    test "then that field's entry carries `\"max_length\" =>` that length" do
+      spec =
+        GraphitiPool.graphiti_boundary_spec(
+          payload(%{
+            edge_types: [
+              %{
+                name: "FOLLOWS",
+                fields: [
+                  %{name: :reason, type: :string, required: false, doc: nil, max_length: 1000}
+                ]
+              }
+            ]
+          })
+        )
+
+      [%{"fields" => [field]}] = spec[:edge_types]
+      assert field["max_length"] == 1000
+    end
+  end
+
+  describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected type carries a field with no maximum length" do
+    test "then that field's entry omits `\"max_length\"` entirely" do
+      spec =
+        GraphitiPool.graphiti_boundary_spec(
+          payload(%{
+            entity_types: [
+              %{
+                name: "Lesson",
+                fields: [%{name: :outcome, type: :string, required: false, doc: nil}]
+              }
+            ]
+          })
+        )
+
+      [%{"fields" => [field]}] = spec[:entity_types]
+      refute Map.has_key?(field, "max_length")
+    end
+  end
+
   describe "when a caller projects an ontology payload into the graphiti boundary spec > while a projected type carries a description" do
     test "then that type's entry carries `\"description\" =>` that string" do
       spec =

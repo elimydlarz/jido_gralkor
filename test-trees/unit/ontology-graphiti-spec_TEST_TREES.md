@@ -19,6 +19,12 @@ when a caller projects an ontology payload into the graphiti boundary spec
     then that field's entry carries `"doc" =>` that string
   while a projected type carries a field with no doc string
     then that field's entry carries `"doc" => nil`
+  while a projected entity type carries a field with a maximum length
+    then that field's entry carries `"max_length" =>` that length
+  while a projected edge type carries a field with a maximum length
+    then that field's entry carries `"max_length" =>` that length
+  while a projected type carries a field with no maximum length
+    then that field's entry omits `"max_length"` entirely
   while a projected type carries a description
     then that type's entry carries `"description" =>` that string
   while a projected type carries no description

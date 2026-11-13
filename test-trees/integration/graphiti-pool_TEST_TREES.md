@@ -113,6 +113,19 @@ when an episode is added
     and the translated entity types, edge types, edge type map, and excluded entity types are forwarded to the graph library
     and the forwarded dictionary carries exactly the keys the ontology selects, omitting the rest
     and the forwarded dictionary uses the graph library's key names outside and the ontology's declared type names inside
+    where an entity field declares a maximum length
+      then the graph library is given that maximum length for the field
+      and the schema the model fills for extraction carries no length limit for the field
+      and the graph library keeps a value longer than its default limit but within the declared length
+      and the graph library drops a value longer than the declared length
+      and the field keeps its earlier value
+    where an edge property declares a maximum length
+      then the graph library is given that maximum length for the property
+      and the graph library keeps a value longer than its default limit but within the declared length
+      and the graph library drops a value longer than the declared length
+      and the property keeps its earlier value
+    where an optional string field declares no maximum length
+      then the graph library drops a value longer than its default limit
   where a supported source kind is supplied
     then conversation, document, and structured-record sources reach the graph library as message, text, and JSON episodes respectively
     and the existing episode extraction is instructed to preserve source attribution and epistemic wording

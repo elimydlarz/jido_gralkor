@@ -32,12 +32,22 @@ when an ontology declares an aliased entity
       then the doc string is recorded as the field's description
     where the call omits `:doc`
       then the field's description is recorded as nil
+    where the call passes `max_length:`
+      then the field records that maximum length
+    where the call omits `:max_length`
+      then the field records no maximum length
     if the field type is unsupported
       then compilation fails naming the rejected type
     if `:required` is given a non-boolean value
       then compilation fails with an error naming `:required`
     if `:doc` is given a value that is neither a string nor nil
       then compilation fails with an error naming `:doc`
+    if `:max_length` is given a value that is not a positive whole number
+      then compilation fails with an error naming `:max_length` and the rejected value
+    if `:max_length` is given to a field that is not a string
+      then compilation fails with an error naming `:max_length` and the field's type
+    if `:max_length` is given to a required field
+      then compilation fails with an error saying `:max_length` applies only to optional fields
   if two fields in the same entity share a name
     then compilation fails with an error naming the duplicated field
   if a relationship-style call appears inside the block
@@ -56,6 +66,8 @@ when an ontology declares an aliased relationship source
   where the block calls `verb Target do … end`
     then a relationship is declared from the source entity to the target entity under the verb's edge name
     and the do-block fields become edge properties with entity-field semantics
+    where a do-block field passes `max_length:`
+      then its edge property records that maximum length
   where the verb is a single lowercase word ("prefers")
     then the edge name is that word uppercased ("PREFERS")
   where the verb contains underscores ("relates_to")
@@ -71,6 +83,8 @@ when an ontology declares an aliased relationship source
     then compilation fails with an error naming the duplicated property
   if repeated verbs have different edge-property schemas
     then compilation fails with an error naming the conflicting verb
+  if repeated verbs disagree on an edge property's maximum length
+    then compilation fails with an error naming the conflicting verb
   if the source alias does not name a declared entity
     then compilation fails at the end of the module naming the unknown source
   if a relationship's target alias does not name a declared entity
@@ -82,7 +96,10 @@ when a consumer reads a declared ontology
   and `:edge_types` lists one `%{name: String.t(), fields: [field()]}` entry per declared verb, deduplicated across `from` blocks
   and `:edge_types` preserves the verbs' first-declaration order
   and `:edge_type_map` lists `{{source_name, target_name}, [edge_name]}` pairs preserving declaration order across `from` blocks
-  and each field entry is `%{name: atom(), type: atom(), required: boolean(), doc: String.t() | nil}`
+  where a field declares no maximum length
+    then its field entry is `%{name: atom(), type: atom(), required: boolean(), doc: String.t() | nil}`
+  where a field declares a maximum length
+    then its field entry is `%{name: atom(), type: atom(), required: boolean(), doc: String.t() | nil, max_length: pos_integer()}`
 
 while an ontology is declared with `relationships: :open`
   where relationships were declared

@@ -286,6 +286,30 @@ defmodule Gralkor.OntologyTest do
     end
   end
 
+  describe "when an ontology declares an aliased entity > where the entity declares a field > where the call passes `max_length:`" do
+    test "then the field records that maximum length" do
+      defmodule MaxLengthFieldOntology do
+        use Gralkor.Ontology, entities: :open, relationships: :open
+
+        entity Lesson do
+          field(:approach, :string, max_length: 1000)
+        end
+      end
+
+      [%{fields: [field]}] = MaxLengthFieldOntology.__ontology__().entity_types
+      assert field.max_length == 1000
+    end
+  end
+
+  describe "when an ontology declares an aliased entity > where the entity declares a field > where the call omits `:max_length`" do
+    test "then the field records no maximum length" do
+      [%{fields: [field]}] =
+        Gralkor.OntologyTest.OptionalFieldOntology.__ontology__().entity_types
+
+      refute Map.has_key?(field, :max_length)
+    end
+  end
+
   describe "when an ontology declares an aliased entity > where the entity declares a field > if the field type is unsupported" do
     test "then compilation fails naming the rejected type" do
       assert_raise CompileError, ~r/atom/, fn ->
@@ -322,6 +346,60 @@ defmodule Gralkor.OntologyTest do
 
           entity User do
             field(:handle, :string, doc: 123)
+          end
+        end
+      end
+    end
+  end
+
+  describe "when an ontology declares an aliased entity > where the entity declares a field > if `:max_length` is given a value that is not a positive whole number" do
+    test "then compilation fails with an error naming `:max_length` and the rejected value" do
+      for rejected <- ["0", "-5", "12.5", "\"long\""] do
+        error =
+          assert_raise CompileError, fn ->
+            Code.compile_string("""
+            defmodule InvalidMaxLengthOntology do
+              use Gralkor.Ontology, entities: :open, relationships: :open
+
+              entity Lesson do
+                field(:approach, :string, max_length: #{rejected})
+              end
+            end
+            """)
+          end
+
+        assert Exception.message(error) =~ ":max_length"
+        assert Exception.message(error) =~ rejected
+      end
+    end
+  end
+
+  describe "when an ontology declares an aliased entity > where the entity declares a field > if `:max_length` is given to a field that is not a string" do
+    test "then compilation fails with an error naming `:max_length` and the field's type" do
+      error =
+        assert_raise CompileError, fn ->
+          defmodule NonStringMaxLengthOntology do
+            use Gralkor.Ontology, entities: :open, relationships: :open
+
+            entity Lesson do
+              field(:attempts, :integer, max_length: 1000)
+            end
+          end
+        end
+
+      assert Exception.message(error) =~ ":max_length"
+      assert Exception.message(error) =~ ":integer"
+    end
+  end
+
+  describe "when an ontology declares an aliased entity > where the entity declares a field > if `:max_length` is given to a required field" do
+    test "then compilation fails with an error saying `:max_length` applies only to optional fields" do
+      assert_raise CompileError, ~r/:max_length.*only.*optional/, fn ->
+        defmodule RequiredMaxLengthOntology do
+          use Gralkor.Ontology, entities: :open, relationships: :open
+
+          entity Lesson do
+            field(:approach, :string, required: true, max_length: 1000)
           end
         end
       end
@@ -439,6 +517,31 @@ defmodule Gralkor.OntologyTest do
       ontology_module = Gralkor.OntologyTest.EdgePropertyOntology
       [%{fields: [field]}] = apply(ontology_module, :__ontology__, []).edge_types
       assert field == %{name: :since, type: :string, required: false, doc: "date first observed"}
+    end
+  end
+
+  describe "when an ontology declares an aliased relationship source > where the block calls `verb Target do … end` > where a do-block field passes `max_length:`" do
+    test "then its edge property records that maximum length" do
+      defmodule MaxLengthEdgePropertyOntology do
+        use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+        entity User do
+          field(:handle, :string)
+        end
+
+        entity Preference do
+          field(:description, :string)
+        end
+
+        from User do
+          prefers Preference do
+            field(:reason, :string, max_length: 1000)
+          end
+        end
+      end
+
+      [%{fields: [field]}] = MaxLengthEdgePropertyOntology.__ontology__().edge_types
+      assert field.max_length == 1000
     end
   end
 
@@ -573,6 +676,44 @@ defmodule Gralkor.OntologyTest do
               field(:strength, :string)
             end
           end
+        end
+      end
+    end
+  end
+
+  describe "when an ontology declares an aliased relationship source > if repeated verbs disagree on an edge property's maximum length" do
+    test "then compilation fails with an error naming the conflicting verb" do
+      for {first, second} <- [
+            {", max_length: 1000", ""},
+            {"", ", max_length: 1000"},
+            {", max_length: 1000", ", max_length: 2000"}
+          ] do
+        assert_raise CompileError, ~r/edge "PREFERS" .*conflicting field schemas/, fn ->
+          Code.compile_string("""
+          defmodule ConflictingEdgeMaxLengthOntology do
+            use Gralkor.Ontology, entities: :open, relationships: :scoped
+
+            entity User do
+              field(:handle, :string)
+            end
+
+            entity Preference do
+              field(:description, :string)
+            end
+
+            from User do
+              prefers Preference do
+                field(:reason, :string#{first})
+              end
+            end
+
+            from Preference do
+              prefers Preference do
+                field(:reason, :string#{second})
+              end
+            end
+          end
+          """)
         end
       end
     end
@@ -741,15 +882,39 @@ defmodule Gralkor.OntologyTest do
                {{"User", "User"}, ["TRUSTS"]}
              ]
     end
+  end
 
-    test "and each field entry is `%{name: atom(), type: atom(), required: boolean(), doc: String.t() | nil}`" do
-      ontology = SusuLikeOntology.__ontology__()
+  describe "when a consumer reads a declared ontology > where a field declares no maximum length" do
+    test "then its field entry is `%{name: atom(), type: atom(), required: boolean(), doc: String.t() | nil}`" do
+      ontology = Gralkor.OntologyTest.SusuLikeOntology.__ontology__()
 
       assert hd(hd(ontology.entity_types).fields) == %{
                name: :handle,
                type: :string,
                required: true,
                doc: "stable login handle"
+             }
+    end
+  end
+
+  describe "when a consumer reads a declared ontology > where a field declares a maximum length" do
+    test "then its field entry is `%{name: atom(), type: atom(), required: boolean(), doc: String.t() | nil, max_length: pos_integer()}`" do
+      defmodule MaxLengthEntryOntology do
+        use Gralkor.Ontology, entities: :open, relationships: :open
+
+        entity Lesson do
+          field(:approach, :string, doc: "how it was done", max_length: 1000)
+        end
+      end
+
+      [%{fields: [approach]}] = MaxLengthEntryOntology.__ontology__().entity_types
+
+      assert approach == %{
+               name: :approach,
+               type: :string,
+               required: false,
+               doc: "how it was done",
+               max_length: 1000
              }
     end
   end

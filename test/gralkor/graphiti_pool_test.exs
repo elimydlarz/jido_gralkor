@@ -4602,6 +4602,296 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when an episode is added > while an ontology module is supplied > where an entity field declares a maximum length" do
+    defmodule LongTextOntologyForGraphitiTest do
+      use Gralkor.Ontology, entities: :strict, relationships: :scoped
+
+      entity Lesson do
+        field(:approach, :string, doc: "how the work was done", max_length: 1000)
+        field(:outcome, :string, doc: "what came of it")
+      end
+
+      from Lesson do
+        follows Lesson do
+          field(:reason, :string, doc: "why one lesson follows another", max_length: 1000)
+        end
+      end
+    end
+
+    test "then the graph library is given that maximum length for the field" do
+      with_materialised_long_text_ontology(fn dicts ->
+        assert graphiti_field_max_length(
+                 materialised_model(dicts, "entity_types", "Lesson"),
+                 "approach"
+               ) ==
+                 declared_max_length(:entity_types, :approach)
+      end)
+    end
+
+    test "and the schema the model fills for extraction carries no length limit for the field" do
+      with_materialised_long_text_ontology(fn dicts ->
+        {schema, _} =
+          Pythonx.eval(
+            """
+            import json
+            json.dumps(model.model_json_schema()["properties"]["approach"])
+            """,
+            %{"model" => materialised_model(dicts, "entity_types", "Lesson")}
+          )
+
+        refute Pythonx.decode(schema) =~ "maxLength"
+        assert Pythonx.decode(schema) =~ "string"
+      end)
+    end
+
+    test "and the graph library keeps a value longer than its default limit but within the declared length" do
+      with_materialised_long_text_ontology(fn dicts ->
+        default_limit = graphiti_default_attribute_limit()
+        declared = declared_max_length(:entity_types, :approach)
+        assert default_limit < declared
+
+        {kept, dropped} =
+          cap_attribute(
+            materialised_model(dicts, "entity_types", "Lesson"),
+            "approach",
+            declared,
+            nil,
+            "overlay"
+          )
+
+        assert String.length(kept) == declared
+        assert dropped == []
+      end)
+    end
+
+    test "and the graph library drops a value longer than the declared length" do
+      with_materialised_long_text_ontology(fn dicts ->
+        declared = declared_max_length(:entity_types, :approach)
+
+        {kept, dropped} =
+          cap_attribute(
+            materialised_model(dicts, "entity_types", "Lesson"),
+            "approach",
+            declared + 1,
+            nil,
+            "overlay"
+          )
+
+        assert kept == nil
+        assert dropped == ["approach"]
+      end)
+    end
+
+    test "and the field keeps its earlier value" do
+      with_materialised_long_text_ontology(fn dicts ->
+        declared = declared_max_length(:entity_types, :approach)
+
+        {kept, _dropped} =
+          cap_attribute(
+            materialised_model(dicts, "entity_types", "Lesson"),
+            "approach",
+            declared + 1,
+            "earlier approach",
+            "overlay"
+          )
+
+        assert kept == "earlier approach"
+      end)
+    end
+  end
+
+  describe "when an episode is added > while an ontology module is supplied > where an edge property declares a maximum length" do
+    test "then the graph library is given that maximum length for the property" do
+      with_materialised_long_text_ontology(fn dicts ->
+        assert graphiti_field_max_length(
+                 materialised_model(dicts, "edge_types", "FOLLOWS"),
+                 "reason"
+               ) ==
+                 declared_max_length(:edge_types, :reason)
+      end)
+    end
+
+    test "and the graph library keeps a value longer than its default limit but within the declared length" do
+      with_materialised_long_text_ontology(fn dicts ->
+        default_limit = graphiti_default_attribute_limit()
+        declared = declared_max_length(:edge_types, :reason)
+        assert default_limit < declared
+
+        {kept, dropped} =
+          cap_attribute(
+            materialised_model(dicts, "edge_types", "FOLLOWS"),
+            "reason",
+            declared,
+            nil,
+            "replace"
+          )
+
+        assert String.length(kept) == declared
+        assert dropped == []
+      end)
+    end
+
+    test "and the graph library drops a value longer than the declared length" do
+      with_materialised_long_text_ontology(fn dicts ->
+        declared = declared_max_length(:edge_types, :reason)
+
+        {kept, dropped} =
+          cap_attribute(
+            materialised_model(dicts, "edge_types", "FOLLOWS"),
+            "reason",
+            declared + 1,
+            nil,
+            "replace"
+          )
+
+        assert kept == nil
+        assert dropped == ["reason"]
+      end)
+    end
+
+    test "and the property keeps its earlier value" do
+      with_materialised_long_text_ontology(fn dicts ->
+        declared = declared_max_length(:edge_types, :reason)
+
+        {kept, _dropped} =
+          cap_attribute(
+            materialised_model(dicts, "edge_types", "FOLLOWS"),
+            "reason",
+            declared + 1,
+            "earlier reason",
+            "replace"
+          )
+
+        assert kept == "earlier reason"
+      end)
+    end
+  end
+
+  describe "when an episode is added > while an ontology module is supplied > where an optional string field declares no maximum length" do
+    test "then the graph library drops a value longer than its default limit" do
+      with_materialised_long_text_ontology(fn dicts ->
+        default_limit = graphiti_default_attribute_limit()
+
+        {kept, dropped} =
+          cap_attribute(
+            materialised_model(dicts, "entity_types", "Lesson"),
+            "outcome",
+            default_limit + 1,
+            nil,
+            "overlay"
+          )
+
+        assert kept == nil
+        assert dropped == ["outcome"]
+      end)
+    end
+  end
+
+  defp with_materialised_long_text_ontology(fun) do
+    data_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "gralkor_pool_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+      )
+
+    File.mkdir_p!(data_dir)
+    {:ok, pid} = start_embedded_pool(data_dir)
+
+    try do
+      dicts =
+        GenServer.call(
+          pid,
+          {:materialise, Gralkor.GraphitiPoolTest.LongTextOntologyForGraphitiTest},
+          :infinity
+        )
+
+      fun.(dicts)
+    after
+      GenServer.stop(pid)
+      File.rm_rf!(data_dir)
+    end
+  end
+
+  defp declared_max_length(kind, field_name) do
+    [%{fields: fields}] =
+      Map.fetch!(Gralkor.GraphitiPoolTest.LongTextOntologyForGraphitiTest.__ontology__(), kind)
+
+    fields |> Enum.find(&(&1.name == field_name)) |> Map.fetch!(:max_length)
+  end
+
+  defp materialised_model(dicts, kind, type_name) do
+    {model, _} =
+      Pythonx.eval(
+        """
+        types[type_name.decode("utf-8")]
+        """,
+        %{"types" => Map.fetch!(dicts, kind), "type_name" => type_name}
+      )
+
+    model
+  end
+
+  defp graphiti_field_max_length(model, field_name) do
+    {max_length, _} =
+      Pythonx.eval(
+        """
+        from graphiti_core.utils.maintenance.attribute_utils import _field_max_length
+        _field_max_length(model, field_name.decode("utf-8"))
+        """,
+        %{"model" => model, "field_name" => field_name}
+      )
+
+    Pythonx.decode(max_length)
+  end
+
+  defp graphiti_default_attribute_limit do
+    {limit, _} =
+      Pythonx.eval(
+        """
+        from graphiti_core.utils.maintenance.attribute_utils import (
+            DEFAULT_ATTRIBUTE_MAX_LENGTH,
+            _resolve_default_max_length,
+        )
+        _resolve_default_max_length(DEFAULT_ATTRIBUTE_MAX_LENGTH)
+        """,
+        %{}
+      )
+
+    Pythonx.decode(limit)
+  end
+
+  defp cap_attribute(model, field_name, value_length, prior, merge_mode) do
+    {result, _} =
+      Pythonx.eval(
+        """
+        from graphiti_core.utils.maintenance.attribute_utils import apply_capped_attributes
+
+        def decode(value):
+            return value.decode("utf-8") if isinstance(value, (bytes, bytearray)) else value
+
+        name = decode(field_name)
+        prior_attributes = {} if prior is None else {name: decode(prior)}
+        merged, dropped = apply_capped_attributes(
+            {name: "x" * value_length},
+            model,
+            prior_attributes,
+            merge_mode=decode(merge_mode),
+        )
+        model(**merged)
+        (merged.get(name), sorted(dropped))
+        """,
+        %{
+          "model" => model,
+          "field_name" => field_name,
+          "value_length" => value_length,
+          "prior" => prior,
+          "merge_mode" => merge_mode
+        }
+      )
+
+    Pythonx.decode(result)
+  end
+
   defp unsupported_provider_error do
     previous_trap_exit = Process.flag(:trap_exit, true)
 

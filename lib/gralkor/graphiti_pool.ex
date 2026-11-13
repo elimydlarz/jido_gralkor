@@ -2540,13 +2540,18 @@ defmodule Gralkor.GraphitiPool do
     base = %{
       "name" => name,
       "fields" =>
-        Enum.map(fields, fn %{name: fname, type: ftype, required: required, doc: doc} ->
-          %{
+        Enum.map(fields, fn %{name: fname, type: ftype, required: required, doc: doc} = field ->
+          entry = %{
             "name" => Atom.to_string(fname),
             "type" => Atom.to_string(ftype),
             "required" => required,
             "doc" => doc
           }
+
+          case Map.get(field, :max_length) do
+            nil -> entry
+            max_length -> Map.put(entry, "max_length", max_length)
+          end
         end)
     }
 
@@ -2562,8 +2567,14 @@ defmodule Gralkor.GraphitiPool do
 
   defp ontology_build_script do
     """
-    from typing import Optional
+    from typing import Annotated, Optional
     from pydantic import BaseModel, Field
+
+    class AttributeLengthCap:
+        __slots__ = ("max_length",)
+
+        def __init__(self, max_length):
+            self.max_length = max_length
 
     type_map = {
         "string": str,
@@ -2597,12 +2608,15 @@ defmodule Gralkor.GraphitiPool do
             required = bool(get(f, "required"))
             doc_raw = get(f, "doc")
             doc = decode(doc_raw) if doc_raw is not None else None
+            max_length = get(f, "max_length")
             if required:
                 annotations[fname] = py_type
                 defaults[fname] = Field(..., description=doc) if doc else Field(...)
             else:
                 annotations[fname] = Optional[py_type]
                 defaults[fname] = Field(default=None, description=doc) if doc else Field(default=None)
+            if max_length is not None:
+                annotations[fname] = Annotated[annotations[fname], AttributeLengthCap(int(max_length))]
         namespace = {"__annotations__": annotations, **defaults}
         if description:
             namespace["__doc__"] = description

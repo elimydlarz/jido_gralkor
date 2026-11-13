@@ -30,6 +30,15 @@ defmodule Gralkor.Ontology do
   `edge_type_map`, and `excluded_entity_types`. The Elixir side never
   constructs Pydantic classes.
 
+  An optional `:string` field may declare `max_length: n` (a positive
+  integer). graphiti-core drops an optional string attribute longer than its
+  default limit unless the field states its own maximum length, so a field
+  whose values are legitimately several sentences long declares one; a value
+  longer than the declared length is still dropped, never truncated, and the
+  field keeps its earlier value. Only graphiti's cap reads the length: the
+  schema the model fills carries no length limit, so a provider never refuses
+  or retries an over-long reply.
+
   An entity's optional description becomes the extracted type's own
   description. graphiti's extractor reads it to decide when to mint the
   entity, so a type whose name alone is ambiguous is extracted far more
@@ -145,13 +154,45 @@ defmodule Gralkor.Ontology do
         description: "Gralkor.Ontology: field :doc must be a string or nil, got #{inspect(doc)}"
     end
 
+    max_length = Keyword.get(opts, :max_length)
+    validate_max_length!(name, type, required, max_length)
+
     entry =
-      Macro.escape(%{name: name, type: type, required: required, doc: doc})
+      %{name: name, type: type, required: required, doc: doc}
+      |> put_max_length(max_length)
+      |> Macro.escape()
 
     quote do
       Gralkor.Ontology.__add_field__(__MODULE__, unquote(entry))
     end
   end
+
+  defp validate_max_length!(_name, _type, _required, nil), do: :ok
+
+  defp validate_max_length!(name, type, required, max_length) do
+    unless is_integer(max_length) and max_length > 0 do
+      raise CompileError,
+        description:
+          "Gralkor.Ontology: field #{inspect(name)} :max_length must be a positive integer, got #{Macro.to_string(max_length)}"
+    end
+
+    unless type == :string do
+      raise CompileError,
+        description:
+          "Gralkor.Ontology: field #{inspect(name)} :max_length applies only to :string fields, got #{inspect(type)}"
+    end
+
+    if required do
+      raise CompileError,
+        description:
+          "Gralkor.Ontology: field #{inspect(name)} :max_length applies only to optional fields; graphiti keeps a required field's value whatever its length"
+    end
+
+    :ok
+  end
+
+  defp put_max_length(field, nil), do: field
+  defp put_max_length(field, max_length), do: Map.put(field, :max_length, max_length)
 
   defmacro from({:__aliases__, _, segments}, do: block) do
     source = segments |> List.last() |> Atom.to_string()
@@ -416,8 +457,8 @@ defmodule Gralkor.Ontology do
   defp fields_equivalent?(a, b) do
     normalise = fn fields ->
       fields
-      |> Enum.map(fn %{name: name, type: type, required: required} ->
-        {name, type, required}
+      |> Enum.map(fn %{name: name, type: type, required: required} = field ->
+        {name, type, required, Map.get(field, :max_length)}
       end)
       |> Enum.sort()
     end
