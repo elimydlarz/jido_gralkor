@@ -1,5 +1,10 @@
 # Changelog
 
+## [Unreleased]
+
+### Added
+- **A Chain of Thought step can name its own model and reasoning effort.** `Gralkor.Reflection.ChainOfThought.Step` has two optional fields, `model` (a `%{provider:, id:}` map, the shape a `:model_resolver` returns) and `reasoning_effort` (any value ReqLLM accepts, such as `:low` or `:high`), both `nil` by default. The consumer sets them on the parsed steps; `ChainOfThought.from_config/1` leaves them `nil`. With built-in inference, a step that names a model runs on that model instead of the model `:model_resolver` names, and a step that names a reasoning effort asks every model call for it instead of the run's `:reasoning_effort`. A step that names neither runs as before. The inference request's `step` map carries the step's `model` and `reasoning_effort` only when the step names them, so a consumer `:inference` function can read them too.
+
 ## [19.1.0] - 2026-11-11
 
 ### Added

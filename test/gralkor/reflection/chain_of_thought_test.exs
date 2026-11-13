@@ -23,6 +23,19 @@ defmodule Gralkor.Reflection.ChainOfThoughtTest do
 
       assert parsed == struct!(Step, definition)
     end
+
+    test "and every parsed step names no model and no reasoning effort" do
+      definition =
+        "review"
+        |> step(%{"findings" => "string"})
+        |> Map.merge(%{model: "openai:gpt-6.1-sol", reasoning_effort: "high"})
+
+      assert {:ok, %ChainOfThought{steps: [parsed]}} =
+               ChainOfThought.from_config(%{"steps" => [definition]})
+
+      assert parsed.model == nil
+      assert parsed.reasoning_effort == nil
+    end
   end
 
   describe "when structured Chain of Thought configuration contains one or more ordered steps > while the configuration and steps use keyword lists" do

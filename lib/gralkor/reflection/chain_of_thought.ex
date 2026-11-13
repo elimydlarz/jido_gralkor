@@ -4,7 +4,7 @@ defmodule Gralkor.Reflection.ChainOfThought do
   defmodule Step do
     @moduledoc false
     @enforce_keys [:label, :directions, :output]
-    defstruct [:label, :directions, :output]
+    defstruct [:label, :directions, :output, model: nil, reasoning_effort: nil]
   end
 
   @enforce_keys [:steps]

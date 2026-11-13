@@ -38,7 +38,7 @@ defmodule Gralkor.Reflection.Runner do
           invocation_id: field(ingestion, :id),
           invocation_context: field(ingestion, :invocation_context) || %{},
           representations: representations(ingestion),
-          step: %{label: step.label, directions: directions},
+          step: step_request(step, directions),
           directions: directions,
           output_schema: step.output,
           tools: tools,
@@ -130,6 +130,15 @@ defmodule Gralkor.Reflection.Runner do
     %{call: call, result: result}
   end
 
+  defp step_request(step, directions) do
+    %{label: step.label, directions: directions}
+    |> put_named(:model, Map.get(step, :model))
+    |> put_named(:reasoning_effort, Map.get(step, :reasoning_effort))
+  end
+
+  defp put_named(request_step, _key, nil), do: request_step
+  defp put_named(request_step, key, value), do: Map.put(request_step, key, value)
+
   defp failure(reflection, step, reason),
     do: {:error, %{reflection: reflection.name, step: step.label, reason: reason}}
 
@@ -201,8 +210,13 @@ defmodule Gralkor.Reflection.Runner do
     and an Array<...> declaration requires a JSON array; do not quote either.
     """
 
-    model_resolver = Keyword.get(opts, :model_resolver, &Gralkor.Config.llm_model/0)
-    model = model_resolver.()
+    step = Map.get(request, :step, %{})
+
+    model =
+      Map.get_lazy(step, :model, fn ->
+        Keyword.get(opts, :model_resolver, &Gralkor.Config.llm_model/0).()
+      end)
+
     model_spec = "#{model.provider}:#{model.id}"
 
     context = Map.put(request.tool_context, :operator_id, request.operator_id)
@@ -220,7 +234,7 @@ defmodule Gralkor.Reflection.Runner do
           tool_max_retries: 0,
           tool_timeout_ms: 30_000
         },
-        Keyword.fetch(opts, :reasoning_effort)
+        step_reasoning_effort(step, opts)
       )
 
     react_opts = [context: context] ++ event_observer(opts)
@@ -231,6 +245,9 @@ defmodule Gralkor.Reflection.Runner do
       %{termination_reason: termination_reason} -> {:error, termination_reason}
     end
   end
+
+  defp step_reasoning_effort(%{reasoning_effort: effort}, _opts), do: {:ok, effort}
+  defp step_reasoning_effort(_step, opts), do: Keyword.fetch(opts, :reasoning_effort)
 
   defp reasoning_effort(config, {:ok, effort}),
     do: Map.put(config, :llm_opts, reasoning_effort: effort)

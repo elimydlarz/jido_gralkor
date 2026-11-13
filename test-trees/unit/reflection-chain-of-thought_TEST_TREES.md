@@ -4,6 +4,7 @@ when structured Chain of Thought configuration contains one or more ordered step
   while the configuration and steps use maps
     then parsing returns the steps in declaration order
     and every parsed step retains its label, directions, and structured-output declaration
+    and every parsed step names no model and no reasoning effort
   while the configuration and steps use keyword lists
     then parsing returns the same structured Chain of Thought
 

@@ -219,6 +219,92 @@ defmodule Gralkor.Reflection.RunnerTest do
     end
   end
 
+  describe "when the Reflection Runner receives a valid Reflection and invocation > where a step names a model without a consumer inference function" do
+    test "then that step's built-in inference runs the model the step names instead of the resolver's" do
+      test_pid = self()
+
+      reflection = %Reflection{
+        name: "step-model",
+        outputs: [],
+        chain_of_thought: %ChainOfThought{
+          steps: [
+            %Step{
+              label: "gather",
+              directions: "Gather.",
+              output: %{"facts" => "string"},
+              model: %{provider: "openai", id: "step-model"}
+            },
+            %Step{
+              label: "conclude",
+              directions: "Conclude from {{facts}}.",
+              output: %{"answer" => "string"}
+            }
+          ]
+        }
+      }
+
+      script_step("Gather.", %{"facts" => "string"}, ~s({"facts":"known"}))
+      script_step("Conclude from known.", %{"answer" => "string"}, ~s({"answer":"ready"}))
+
+      resolver = fn ->
+        send(test_pid, :model_resolved)
+        %{provider: "openai", id: "gpt-6-luna"}
+      end
+
+      assert {:ok, %Artefact{payload: %{"answer" => "ready"}}} =
+               Gralkor.Reflection.Runner.run(
+                 reflection,
+                 %{id: "step-model-run", operator_id: "operator-one", representations: []},
+                 model_resolver: resolver
+               )
+
+      assert_received :model_resolved
+      refute_received :model_resolved
+    end
+  end
+
+  describe "when the Reflection Runner receives a valid Reflection and invocation > where a step names a model or a reasoning effort" do
+    test "then that step's request carries the model and reasoning effort it names" do
+      test_pid = self()
+      model = %{provider: "openai", id: "step-model"}
+
+      steps = [
+        %Step{
+          label: "collect",
+          directions: "Collect evidence.",
+          output: %{"evidence" => "string"},
+          model: model,
+          reasoning_effort: :high
+        },
+        %Step{
+          label: "decide",
+          directions: "Decide from {{evidence}}.",
+          output: %{"answer" => "string", "confidence" => "integer"}
+        }
+      ]
+
+      inference = fn request ->
+        send(test_pid, {:step_request, request.step})
+        {:ok, output_for(request)}
+      end
+
+      assert {:ok, %Artefact{}} =
+               Runner.run(reflection(steps), invocation(), inference: inference)
+
+      assert_received {:step_request, first}
+
+      assert first == %{
+               label: "collect",
+               directions: "Collect evidence.",
+               model: model,
+               reasoning_effort: :high
+             }
+
+      assert_received {:step_request, second}
+      assert second == %{label: "decide", directions: "Decide from gathered evidence."}
+    end
+  end
+
   describe "when the Reflection Runner receives a valid Reflection and invocation > where an observer is supplied" do
     test "then the observer is told each step's label as that step starts" do
       assert {:ok, %Artefact{}} = run_successful_sequence(observer: observer())
@@ -590,6 +676,35 @@ defmodule Gralkor.Reflection.RunnerTest do
   describe "when built-in inference is invoked for a step > where no reasoning effort is supplied" do
     test "then no model call names a reasoning effort" do
       refute Map.has_key?(built_in_config(default_inference_request(), []), :llm_opts)
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > where the step names a model" do
+    test "then it runs the model the step names" do
+      request =
+        Map.put(default_inference_request(), :step, %{
+          label: "use",
+          directions: "Use the evidence.",
+          model: %{provider: "openai", id: "step-model"}
+        })
+
+      assert built_in_config(request,
+               model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end
+             ).model == "openai:step-model"
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > where the step names a reasoning effort" do
+    test "then every model call asks the model for the reasoning effort the step names" do
+      request =
+        Map.put(default_inference_request(), :step, %{
+          label: "use",
+          directions: "Use the evidence.",
+          reasoning_effort: :high
+        })
+
+      assert built_in_config(request, reasoning_effort: :low).llm_opts ==
+               [reasoning_effort: :high]
     end
   end
 

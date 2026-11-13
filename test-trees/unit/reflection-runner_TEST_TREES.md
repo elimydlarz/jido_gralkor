@@ -8,6 +8,10 @@ when the Reflection Runner receives a valid Reflection and invocation
   and only the current step is exposed to inference
   where a model resolver is supplied without a consumer inference function
     then every step's built-in inference runs the model that resolver names
+  where a step names a model without a consumer inference function
+    then that step's built-in inference runs the model the step names instead of the resolver's
+  where a step names a model or a reasoning effort
+    then that step's request carries the model and reasoning effort it names
   where an observer is supplied
     then the observer is told each step's label as that step starts
     and every step's built-in inference tells the observer of its tool calls
@@ -65,6 +69,10 @@ when built-in inference is invoked for a step
     then every model call asks the model for that reasoning effort
   where no reasoning effort is supplied
     then no model call names a reasoning effort
+  where the step names a model
+    then it runs the model the step names
+  where the step names a reasoning effort
+    then every model call asks the model for the reasoning effort the step names
   if the provider fails or returns invalid JSON or a non-object JSON value
     then built-in inference returns the identified error
   if the ReAct runtime ends without a final answer
