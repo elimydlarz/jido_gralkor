@@ -103,7 +103,8 @@ Gralkor.Client.search(agent_server, %Gralkor.Search{
   writers: ["lens:commits"],               # default: every writer
   excluded_writers: ["unknown"],           # default: none
   entity_types: ["Commit", "Function"],    # default: no filter
-  edge_types: ["CHANGES"]                  # default: no filter
+  edge_types: ["CHANGES"],                 # default: no filter
+  since: ~U[2026-11-13 00:00:00Z]          # default: memory created at any time
 })
 ```
 
@@ -147,6 +148,8 @@ Every episode is written by exactly one writer, every fact is produced by the wr
 - `writers` keeps only episodes an included writer wrote, facts drawn from such an episode, and entities such an episode mentions; each fact's `sources` keep only included writers' episodes.
 - `excluded_writers` leaves out episodes an excluded writer wrote, and facts and entities produced only by excluded writers; a fact or entity another writer also produced stays, so cross-source relationships survive, and its `sources` omit excluded writers' episodes.
 - Together, a result is returned only when an included writer produced it and a writer that is not excluded produced it.
+
+`since` is a `DateTime`: only episodes, facts, and entities created at or after it are returned, checked inside the same queries as the writers, before their limits, so older memory cannot use up a limit. A fact keeps the creation time of its first extraction. Any other value raises before any Destination is searched.
 
 `entity_types` and `edge_types` restrict what remains. A writer named more than once is applied once. Anything other than the forms above raises `ArgumentError` before any Destination is searched, saying whether the writer was included or excluded and naming the value.
 
