@@ -658,6 +658,121 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
+  describe "when a caller searches memory > where no earliest creation time is supplied" do
+    test "then results created at any time can contribute" do
+      start_native_graph() |> seed_aged_memory(2, 2) |> record_seeded_writers()
+
+      assert {:ok, [%{facts: facts, nodes: nodes, episodes: episodes}]} =
+               search(query: "amber", destinations: ["first"])
+
+      assert "amber amber amber aged 1" in episode_contents(episodes)
+      assert "amber alpha memory" in episode_contents(episodes)
+      assert "amber amber amber aged fact 1" in fact_texts(facts)
+      assert "amber alpha lesson learns from amber alpha project" in fact_texts(facts)
+      assert "amber amber amber aged entity 1" in node_names(nodes)
+      assert "amber alpha lesson" in node_names(nodes)
+    end
+  end
+
+  describe "when a caller searches memory > where an earliest creation time is supplied" do
+    test "then only episodes created at or after that time are returned" do
+      since = start_native_graph() |> seed_aged_memory(2, 2) |> record_seeded_writers() |> since()
+
+      assert {:ok, [%{episodes: episodes}]} = since_search(since)
+
+      assert episode_contents(episodes) == [
+               "amber alpha memory",
+               "amber beta memory",
+               "amber direct memory"
+             ]
+
+      assert [%{artefact: %{id: "amber-review"}}] = artefact_episodes(episodes)
+    end
+
+    test "and only facts created at or after that time are returned" do
+      since = start_native_graph() |> seed_aged_memory(2, 2) |> record_seeded_writers() |> since()
+
+      assert {:ok, [%{facts: facts}]} = since_search(since)
+      assert fact_texts(facts) == recent_fact_texts()
+    end
+
+    test "and only entities created at or after that time are returned" do
+      since = start_native_graph() |> seed_aged_memory(2, 2) |> record_seeded_writers() |> since()
+
+      assert {:ok, [%{nodes: nodes}]} = since_search(since)
+
+      assert node_names(nodes) == [
+               "amber alpha lesson",
+               "amber alpha project",
+               "amber beta lesson",
+               "amber direct project"
+             ]
+    end
+
+    test "and results created earlier than that time cannot consume any per-Destination limit" do
+      since =
+        start_native_graph() |> seed_aged_memory(20, 60) |> record_seeded_writers() |> since()
+
+      assert {:ok, [%{facts: unfiltered, nodes: unfiltered_nodes, episodes: unfiltered_episodes}]} =
+               search(query: "amber", destinations: ["first"])
+
+      assert length(unfiltered) == 50
+      assert length(unfiltered_nodes) == 20
+      assert length(unfiltered_episodes) == 15
+
+      assert {:ok, [%{facts: facts, nodes: nodes, episodes: episodes}]} = since_search(since)
+
+      assert length(facts) == 5
+      assert length(nodes) == 4
+      assert length(episodes) == 4
+    end
+
+    test "and entity and edge type filters further restrict the remaining results" do
+      since = start_native_graph() |> seed_aged_memory(2, 2) |> record_seeded_writers() |> since()
+
+      assert {:ok, [%{facts: facts}]} = since_search(since, edge_types: ["OWNS"])
+
+      assert fact_texts(facts) == [
+               "amber alpha project owns amber alpha lesson",
+               "amber beta lesson owns amber alpha lesson",
+               "amber direct project owns amber direct project"
+             ]
+
+      assert {:ok, [%{nodes: nodes, facts: facts}]} =
+               since_search(since, entity_types: ["Learning"])
+
+      assert node_names(nodes) == ["amber alpha lesson", "amber beta lesson"]
+
+      assert fact_texts(facts) == [
+               "amber beta lesson owns amber alpha lesson",
+               "amber shared lesson fact"
+             ]
+    end
+
+    test "and included and excluded writers further restrict the remaining results" do
+      since = start_native_graph() |> seed_aged_memory(2, 2) |> record_seeded_writers() |> since()
+
+      assert {:ok, [%{facts: facts, nodes: nodes, episodes: episodes}]} =
+               since_search(since, writers: ["lens:first-alpha"])
+
+      assert episode_contents(episodes) == ["amber alpha memory"]
+
+      assert fact_texts(facts) == [
+               "amber alpha lesson learns from amber alpha project",
+               "amber alpha project owns amber alpha lesson",
+               "amber shared lesson fact"
+             ]
+
+      assert node_names(nodes) == ["amber alpha lesson", "amber alpha project"]
+
+      assert {:ok, [%{episodes: episodes}]} =
+               since_search(since, excluded_writers: ["lens:first-beta", "reflection:review"])
+
+      assert episode_contents(episodes) == ["amber alpha memory", "amber direct memory"]
+      assert artefact_episodes(episodes) == []
+    end
+  end
+
   describe "when a search names a writer" do
     test "then `lens:<name>` names the Lens of that name" do
       start_native_graph() |> seed_lens_graph() |> record_seeded_writers()
@@ -1287,6 +1402,48 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     end
   end
 
+  describe "if search supplies an earliest creation time that is not a date and time with a time zone" do
+    test "then search fails before any Destination query is started" do
+      start_runtime_with_lens()
+
+      for since <- invalid_earliest_creation_times() do
+        assert_raise ArgumentError, fn -> search(since: since) end
+        refute_receive {:destination_search, _, _, _, _}
+
+        assert_raise ArgumentError, fn -> Client.search(self(), runtime_since_request(since)) end
+        refute_receive {:destination_search, _, _, _, _}
+      end
+    end
+
+    test "and the error identifies the rejected earliest creation time and its rejected value" do
+      for since <- invalid_earliest_creation_times() do
+        error = assert_raise ArgumentError, fn -> search(since: since) end
+        assert error.message =~ "since"
+        assert error.message =~ "earliest creation time"
+        assert error.message =~ inspect(since)
+      end
+    end
+  end
+
+  defp invalid_earliest_creation_times do
+    [
+      ~N[2026-06-01 00:00:00],
+      ~D[2026-06-01],
+      "2026-06-01T00:00:00Z",
+      1_780_272_000,
+      ~T[00:00:00]
+    ]
+  end
+
+  defp runtime_since_request(since) do
+    %Search{
+      operator_id: "operator-one",
+      query: "question",
+      destinations: ["runtime-memory"],
+      since: since
+    }
+  end
+
   defp search(overrides) do
     Client.search(
       struct!(
@@ -1335,6 +1492,22 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
 
   defp writer_search(writers, overrides \\ []) do
     search([query: "amber", destinations: ["first"], writers: writers] ++ overrides)
+  end
+
+  defp since_search(since, overrides \\ []) do
+    search([query: "amber", destinations: ["first"], since: since] ++ overrides)
+  end
+
+  defp since(%{since: since}), do: since
+
+  defp recent_fact_texts do
+    [
+      "amber alpha lesson learns from amber alpha project",
+      "amber alpha project owns amber alpha lesson",
+      "amber beta lesson owns amber alpha lesson",
+      "amber direct project owns amber direct project",
+      "amber shared lesson fact"
+    ]
   end
 
   defp exclusion_search(excluded_writers, overrides \\ []) do
@@ -1531,6 +1704,41 @@ defmodule Gralkor.DestinationSearchFunctionalTest do
     )
 
     graph
+  end
+
+  # Memory written through `first-alpha` and `first-beta` on 2026-01-01 (the
+  # given numbers of episodes and of entities, each entity a Learning with one
+  # OWNS fact, each matching the query more strongly than any later result),
+  # then the moment returned as `since`, then the memory `seed_lens_graph/1`
+  # writes.
+  defp seed_aged_memory(%{database: database} = graph, episodes, entities) do
+    create_existing_indexes(database)
+
+    Pythonx.eval(
+      """
+      graph = database.select_graph('g_' + b'first'.hex())
+      graph.query('''
+        UNWIND range(1, $episodes) AS i
+        CREATE (:Episodic {uuid: 'aged-episode-' + toString(i), name: 'aged-' + toString(i), group_id: $group, source: 'text',
+                source_description: CASE WHEN i % 2 = 0 THEN 'notes [lens: first-alpha]' ELSE 'notes [lens: first-beta]' END,
+                content: 'amber amber amber aged ' + toString(i), entity_edges: [], created_at: '2026-01-01T00:00:00+00:00', valid_at: '2026-01-01T00:00:00+00:00'})
+      ''', {'group': 'g_' + b'first'.hex(), 'episodes': episodes})
+      graph.query('''
+        UNWIND range(1, $entities) AS i
+        MATCH (episode:Episodic {uuid: 'aged-episode-' + toString((i % $episodes) + 1)})
+        CREATE (n:Entity:Learning {uuid: 'aged-entity-' + toString(i), name: 'amber amber amber aged entity ' + toString(i), group_id: $group, summary: 'amber amber amber', created_at: '2026-01-01T00:00:00+00:00'}),
+               (episode)-[:MENTIONS {uuid: 'aged-mention-' + toString(i), group_id: $group, created_at: '2026-01-01T00:00:00+00:00'}]->(n),
+               (n)-[e:RELATES_TO {uuid: 'aged-fact-' + toString(i), name: 'OWNS', fact: 'amber amber amber aged fact ' + toString(i), episodes: [episode.uuid], group_id: $group, created_at: '2026-01-01T00:00:00+00:00', valid_at: '2026-01-01T00:00:00+00:00'}]->(n)
+        SET n.name_embedding = vecf32([0.1, 0.2, 0.3]),
+            e.fact_embedding = vecf32([0.1, 0.2, 0.3])
+      ''', {'group': 'g_' + b'first'.hex(), 'episodes': episodes, 'entities': entities})
+      None
+      """,
+      %{"database" => database, "episodes" => episodes, "entities" => entities}
+    )
+
+    since = DateTime.utc_now()
+    graph |> seed_lens_graph() |> Map.put(:since, since)
   end
 
   # Sixty direct facts and entities and twenty direct episodes, each matching

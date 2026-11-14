@@ -109,7 +109,7 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
     end
   end
 
-  describe "when in-memory Destination storage is searched with no writer included" do
+  describe "when in-memory Destination storage is searched with neither included writers nor an earliest creation time" do
     test "then facts and episodes of the Destination are returned within their limits" do
       seed_writers()
 
@@ -172,6 +172,95 @@ defmodule Gralkor.Destination.Storage.InMemoryArtefactTest do
       refute Enum.any?(episodes, &(Map.get(&1, :writer) == :direct))
       refute Enum.any?(facts, &(&1.fact in ["direct one", "beta one", "old one"]))
     end
+  end
+
+  describe "when in-memory Destination storage is searched with an earliest creation time" do
+    test "then only episodes stored at or after that time are returned" do
+      since = seed_ages()
+
+      assert {:ok, %{episodes: episodes}} = since_search(since)
+
+      assert [%{artefact: %{id: "new-review"}} | lens_episodes] = episodes
+      assert Enum.map(lens_episodes, & &1.content) == ["alpha new", "direct at", "beta new"]
+    end
+
+    test "and only facts drawn from those episodes are returned" do
+      since = seed_ages()
+
+      assert {:ok, %{facts: facts}} = since_search(since)
+      assert Enum.map(facts, & &1.fact) == ["alpha new", "direct at", "beta new"]
+    end
+
+    test "and no nodes are returned" do
+      since = seed_ages()
+      assert {:ok, %{nodes: []}} = since_search(since)
+    end
+
+    test "and included and excluded writers further restrict the remaining episodes" do
+      since = seed_ages()
+
+      assert {:ok, %{facts: [%{fact: "alpha new"}], episodes: [%{content: "alpha new"}]}} =
+               since_search(since, writers: ["lens:alpha"])
+
+      assert {:ok, %{episodes: [%{artefact: %{id: "new-review"}}]}} =
+               since_search(since, writers: ["reflection:*"])
+
+      assert {:ok, %{facts: facts, episodes: [%{artefact: %{id: "new-review"}} | episodes]}} =
+               since_search(since, excluded_writers: ["lens:alpha"])
+
+      assert Enum.map(episodes, & &1.content) == ["direct at", "beta new"]
+      assert Enum.map(facts, & &1.fact) == ["direct at", "beta new"]
+    end
+  end
+
+  # One Destination holding an artefact and episodes from two Lenses and a direct
+  # write stored before the returned time, an episode stored exactly at it, and
+  # episodes and an artefact stored after it.
+  defp seed_ages do
+    assert :ok =
+             InMemory.put_artefact(
+               output(),
+               "review",
+               "operator-one",
+               artefact("old-review", %{"summary" => "old"})
+             )
+
+    Process.sleep(2)
+    since = DateTime.utc_now()
+    earlier = DateTime.add(since, -3600)
+    later = DateTime.add(since, 3600)
+
+    for {content, writer, stored_at} <- [
+          {"alpha old", %{lens: "alpha"}, earlier},
+          {"beta old", %{lens: "beta"}, earlier},
+          {"direct old", %{writer: :direct}, earlier},
+          {"alpha new", %{lens: "alpha"}, later},
+          {"direct at", %{writer: :direct}, since},
+          {"beta new", %{lens: "beta"}, later}
+        ] do
+      add_episode(
+        Map.merge(writer, %{content: content, source_description: "notes", stored_at: stored_at})
+      )
+    end
+
+    assert :ok =
+             InMemory.put_artefact(
+               output(),
+               "review",
+               "operator-one",
+               artefact("new-review", %{"summary" => "new"})
+             )
+
+    since
+  end
+
+  defp since_search(since, opts \\ []) do
+    InMemory.search(
+      %Destination{name: "observations"},
+      "operator-one",
+      "q",
+      [limits: Gralkor.Search.limits(), since: since] ++ opts
+    )
   end
 
   # One Destination holding an artefact, two appending Lenses' episodes, and a

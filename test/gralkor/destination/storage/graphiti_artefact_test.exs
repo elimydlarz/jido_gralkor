@@ -197,7 +197,7 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
     }
 
   describe "when Graphiti Destination storage searches a Destination" do
-    test "then the pool is asked for the Destination's group with the limits, entity types as node labels, edge types, included writers, and excluded writers" do
+    test "then the pool is asked for the Destination's group with the limits, entity types as node labels, edge types, included writers, excluded writers, and the earliest creation time" do
       test_pid = self()
 
       assert {:ok, %{facts: [], nodes: [], episodes: []}} =
@@ -210,7 +210,8 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                    entity_types: ["Project"],
                    edge_types: ["OWNS"],
                    writers: ["lens:alpha", "direct"],
-                   excluded_writers: ["lens:beta"]
+                   excluded_writers: ["lens:beta"],
+                   since: ~U[2026-06-01 00:00:00Z]
                  ],
                  recording_search_memory(test_pid)
                )
@@ -222,7 +223,8 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                node_labels: ["Project"],
                edge_types: ["OWNS"],
                writers: ["lens:alpha", "direct"],
-               excluded_writers: ["lens:beta"]
+               excluded_writers: ["lens:beta"],
+               since: ~U[2026-06-01 00:00:00Z]
              ]
     end
 
@@ -239,7 +241,14 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                )
 
       assert_receive {:search_memory, "observations", "amber", _limits, opts}
-      assert opts == [node_labels: nil, edge_types: nil, writers: nil, excluded_writers: nil]
+
+      assert opts == [
+               node_labels: nil,
+               edge_types: nil,
+               writers: nil,
+               excluded_writers: nil,
+               since: nil
+             ]
     end
   end
 

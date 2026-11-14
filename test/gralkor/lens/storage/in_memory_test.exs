@@ -47,6 +47,23 @@ defmodule Gralkor.Lens.Storage.InMemoryTest do
       assert [%{lens: "published-observations"}, %{lens: "generalisations"}] =
                InMemory.episodes(key(published))
     end
+
+    test "and every stored episode retains when it was stored" do
+      observations = application_store("operator-one", "observations")
+
+      before_first = DateTime.utc_now()
+      assert :ok = InMemory.add_episode(observations, "first", "test")
+      between = DateTime.utc_now()
+      assert :ok = InMemory.add_episode(observations, "second", "test")
+      after_second = DateTime.utc_now()
+
+      assert [%{stored_at: first}, %{stored_at: second}] = InMemory.episodes(key(observations))
+
+      assert DateTime.compare(first, before_first) != :lt
+      assert DateTime.compare(first, between) != :gt
+      assert DateTime.compare(second, between) != :lt
+      assert DateTime.compare(second, after_second) != :gt
+    end
   end
 
   describe "when a Lens store is searched with a maximum result count" do

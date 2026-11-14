@@ -52,6 +52,17 @@ when a caller searches memory
   where one or more writers are included or excluded
     then the search takes about as long as an unfiltered search of the same Destinations, however many results those writers produced
 
+  where no earliest creation time is supplied
+    then results created at any time can contribute
+
+  where an earliest creation time is supplied
+    then only episodes created at or after that time are returned
+    and only facts created at or after that time are returned
+    and only entities created at or after that time are returned
+    and results created earlier than that time cannot consume any per-Destination limit
+    and entity and edge type filters further restrict the remaining results
+    and included and excluded writers further restrict the remaining results
+
 when a search names a writer
   then `lens:<name>` names the Lens of that name
   and `reflection:<name>` names the Reflection of that name, whose output is stored in memory
@@ -133,3 +144,7 @@ if search includes or excludes anything but `direct`, `unknown`, `lens:*`, `refl
   and no valid subset is searched
   and the error says whether the rejected writer was included or excluded
   and the error identifies the rejected value
+
+if search supplies an earliest creation time that is not a date and time with a time zone
+  then search fails before any Destination query is started
+  and the error identifies the rejected earliest creation time and its rejected value

@@ -199,7 +199,7 @@ when a memory search is run for a group
       and its edge filter admits an edge whose source and target each carry any one of them
   while edge types are supplied
     then the single search's filter carries those relationship types
-  while neither node labels, edge types, included writers, nor excluded writers are supplied
+  while neither node labels, edge types, included writers, excluded writers, nor an earliest creation time are supplied
     then the single search's filter leaves every node and edge eligible
     and the graph library's own node and episode queries are issued unchanged
   while writers are included
@@ -216,6 +216,12 @@ when a memory search is run for a group
     and each rejection is decided from the writers recorded on the edge, node, or episode itself, without a list of record identifiers
     and every rejection is applied inside its query, before its limit
     and each rendered fact's sources omit episodes written by an excluded writer
+  while an earliest creation time is supplied
+    then the single search's filter admits only edges created at or after that time
+    and the single search's filter admits only nodes created at or after that time
+    and the single search's filter admits only episodes created at or after that time
+    and every admission is applied inside its query, before its limit
+    and any included or excluded writers are applied in the same queries
   when the query exceeds the graph library's full-text limit
     then the graph library receives a bounded non-empty query containing the earliest supported terms
   when a returned Reflection episode lacks its durable extraction-completion marker

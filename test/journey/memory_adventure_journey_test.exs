@@ -320,6 +320,16 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
+  describe "when the Journey consumer triggers a consumer-defined Reflection with a Destination output > when the Journey consumer searches for memory created at or after the moment it triggered that Reflection" do
+    test "then that Reflection's artefact is returned", context do
+      assert_since_reflection_artefact(context)
+    end
+
+    test "and no directly written memory is returned", context do
+      refute_since_reflection_direct_memory(context)
+    end
+  end
+
   describe "when a fresh agent handles a request related to stored deployment lessons" do
     test "then one MemorySearch call is made without selectors", %{adventure: adventure} do
       assert adventure.memory_search_completion_count == 1
@@ -654,6 +664,8 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     assert {:ok, published_representations} =
              Client.ingest_with_representation(agent, published_request)
 
+    reflection_triggered_at = DateTime.utc_now()
+
     consumer_reflection_result =
       invoke_reflection_result!(
         agent,
@@ -677,6 +689,16 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     assert consumer_destination_artefact.id == consumer_artefact_id
 
     consumer_returned_artefact = consumer_reflection_result.artefact
+
+    since_reflection_search =
+      since_search_until(
+        agent,
+        reflection_triggered_at,
+        "#{consumer_artefact_id} private deployment codename Juniper Muscat Kestrel Quito Cedar Amman",
+        fn results ->
+          Enum.any?(flatten(results, :artefacts), &(&1.artefact.id == consumer_artefact_id))
+        end
+      )
 
     :ok =
       Client.ingest(agent, %Ingest{
@@ -860,6 +882,7 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
       consumer_destination_artefact: consumer_destination_artefact,
       consumer_returned_artefact: consumer_returned_artefact,
       consumer_reflection_outcome: consumer_reflection_result.outcome,
+      since_reflection_search: since_reflection_search,
       default_memory_search: default_memory_search,
       default_memory_search_destinations: agent_request.memory_search_destinations,
       default_memory_search_artefacts: agent_request.memory_search_artefacts,
@@ -995,7 +1018,47 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     end
   end
 
+  # Searches every Destination operator one can read through
+  # `Gralkor.Client.search/2` for memory created at or after `since`, retrying
+  # until `predicate` holds or attempts run out.
+  defp since_search_until(agent, since, query, predicate, attempts \\ 60) do
+    assert {:ok, results} =
+             Client.search(agent, %Search{
+               operator_id: @operator_one,
+               query: query,
+               since: since
+             })
+
+    if predicate.(results) or attempts <= 1 do
+      results
+    else
+      Process.sleep(1_000)
+      since_search_until(agent, since, query, predicate, attempts - 1)
+    end
+  end
+
   defp lens_episodes(results), do: Enum.flat_map(results, & &1.episodes)
+
+  defp assert_since_reflection_artefact(%{adventure: adventure}) do
+    assert adventure.consumer_destination_artefact in Enum.map(
+             flatten(adventure.since_reflection_search, :artefacts),
+             & &1.artefact
+           )
+  end
+
+  defp refute_since_reflection_direct_memory(%{adventure: adventure}) do
+    refute directly_written_memory?(adventure.since_reflection_search)
+  end
+
+  defp directly_written_memory?(results) do
+    episodes = lens_episodes(results)
+    facts = Enum.flat_map(results, & &1.facts)
+    texts = Enum.map(episodes, &episode_content/1) ++ Enum.map(facts, & &1.fact)
+    sources = Enum.flat_map(facts, &Map.get(&1, :sources, []))
+
+    Enum.any?(episodes ++ sources, &(Map.get(&1, :writer) == :direct)) or
+      Enum.any?(texts, &String.contains?(&1, ["Juniper", "Kestrel", "Cedar"]))
+  end
 
   defp flatten(results, :facts),
     do:

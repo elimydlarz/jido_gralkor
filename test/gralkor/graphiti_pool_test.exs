@@ -134,7 +134,7 @@ defmodule Gralkor.GraphitiPoolTest do
           def text(value):
               return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
           kwargs = {
-              text(key): [text(item) for item in value]
+              text(key): text(value) if isinstance(value, (bytes, bytearray)) else [text(item) for item in value]
               for key, value in filter_kwargs.items()
           }
           cls = (
@@ -195,8 +195,8 @@ defmodule Gralkor.GraphitiPoolTest do
               SearchFilters()
               if filter_kwargs is None
               else search_utils._gralkor_search_filters(**{
-                  text(key): [text(writer) for writer in writers]
-                  for key, writers in filter_kwargs.items()
+                  text(key): text(value) if isinstance(value, (bytes, bytearray)) else [text(writer) for writer in value]
+                  for key, value in filter_kwargs.items()
               })
           )
           wrapped = _RecordingDriver()
@@ -2584,7 +2584,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a memory search is run for a group > while neither node labels, edge types, included writers, nor excluded writers are supplied" do
+  describe "when a memory search is run for a group > while neither node labels, edge types, included writers, excluded writers, nor an earliest creation time are supplied" do
     test "then the single search's filter leaves every node and edge eligible" do
       {_results, recorded} = memory_search_result()
       assert recorded["filter_class"] == "SearchFilters"
@@ -2593,6 +2593,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert recorded["edge_uuids"] == nil
       assert recorded["writers"] == nil
       assert recorded["excluded_writers"] == nil
+      assert recorded["since"] == nil
     end
 
     test "and the graph library's own node and episode queries are issued unchanged" do
@@ -2838,7 +2839,8 @@ defmodule Gralkor.GraphitiPoolTest do
     def text(value):
         return value.decode('utf-8') if isinstance(value, (bytes, bytearray)) else value
     filters = search_utils._gralkor_search_filters(**{
-        text(key): [text(writer) for writer in writers] for key, writers in filter_kwargs.items()
+        text(key): text(value) if isinstance(value, (bytes, bytearray)) else [text(writer) for writer in value]
+        for key, value in filter_kwargs.items()
     })
     async def run():
         edges = await search_utils.edge_fulltext_search(g.driver, 'amber', filters, None, limit)
@@ -2857,6 +2859,130 @@ defmodule Gralkor.GraphitiPoolTest do
       "limit" => limit
     })
     |> Pythonx.decode()
+  end
+
+  describe "when a memory search is run for a group > while an earliest creation time is supplied" do
+    setup [:start_real_embedded_pool, :seed_aged_graph]
+
+    test "then the single search's filter admits only edges created at or after that time",
+         %{instance: instance} do
+      {_results, recorded} = memory_search_result(opts: [since: ~U[2026-06-01 00:00:00Z]])
+      assert recorded["filter_class"] == "WriterSearchFilters"
+      assert recorded["since"] == "2026-06-01T00:00:00+00:00"
+      assert recorded["writers"] == nil
+      assert recorded["excluded_writers"] == nil
+
+      assert writer_search(instance, %{"since" => "2026-06-01T00:00:00Z"})["edges"] ==
+               ["at-edge", "new-edge"]
+
+      assert writer_search(instance, %{"since" => "2026-06-01T02:00:00+02:00"})["edges"] ==
+               ["at-edge", "new-edge"]
+    end
+
+    test "and the single search's filter admits only nodes created at or after that time",
+         %{instance: instance} do
+      assert writer_search(instance, %{"since" => "2026-06-01T00:00:00Z"})["nodes"] ==
+               ["at-node", "new-node"]
+
+      assert writer_search(instance, %{"since" => "2026-06-01T00:00:00.000001Z"})["nodes"] ==
+               ["new-node"]
+    end
+
+    test "and the single search's filter admits only episodes created at or after that time",
+         %{instance: instance} do
+      assert writer_search(instance, %{"since" => "2026-06-01T00:00:00Z"})["episodes"] ==
+               ["at-ep", "new-ep"]
+
+      assert writer_search(instance, %{"since" => "2025-01-01T00:00:00Z"})["episodes"] ==
+               ["at-ep", "new-ep", "old-ep"]
+    end
+
+    test "and every admission is applied inside its query, before its limit", %{
+      instance: instance
+    } do
+      found = writer_search(instance, %{"since" => "2026-06-02T00:00:00Z"}, 1)
+
+      assert found == %{
+               "edges" => ["new-edge"],
+               "nodes" => ["new-node"],
+               "episodes" => ["new-ep"]
+             }
+
+      queries = filter_queries(%{"since" => "2026-06-01T00:00:00Z"}, "WriterSearchFilters")
+
+      for {kind, variable} <- [
+            {"node", "n"},
+            {"falkor_node", "n"},
+            {"edge", "e"},
+            {"falkor_edge", "e"}
+          ] do
+        assert "#{variable}.created_at >= $gralkor_since" in queries[kind]["queries"]
+        assert queries[kind]["params"] == %{"gralkor_since" => "2026-06-01T00:00:00+00:00"}
+      end
+
+      %{"wrapped" => [query]} = episode_fulltext_queries(%{"since" => "2026-06-01T00:00:00Z"})
+      assert {admission_at, _} = :binary.match(query["cypher"], "e.created_at >= $gralkor_since")
+      assert {limit_at, _} = :binary.match(query["cypher"], "LIMIT $limit")
+      assert admission_at < limit_at
+      assert query["gralkor_since"] == "2026-06-01T00:00:00+00:00"
+      assert query["limit"] == 5
+    end
+
+    test "and any included or excluded writers are applied in the same queries", %{
+      instance: instance
+    } do
+      restriction = %{
+        "since" => "2026-06-01T00:00:00Z",
+        "writers" => ["lens:*"],
+        "excluded_writers" => ["lens:beta"]
+      }
+
+      queries = filter_queries(restriction, "WriterSearchFilters")
+
+      for {kind, variable} <- [
+            {"node", "n"},
+            {"falkor_node", "n"},
+            {"edge", "e"},
+            {"falkor_edge", "e"}
+          ] do
+        assert "#{variable}.created_at >= $gralkor_since" in queries[kind]["queries"]
+        assert Enum.count(queries[kind]["queries"], &(&1 =~ "#{variable}._gralkor_writers")) == 2
+      end
+
+      %{"wrapped" => [query]} = episode_fulltext_queries(restriction)
+      assert query["cypher"] =~ "e.created_at >= $gralkor_since"
+      assert query["cypher"] =~ "e._gralkor_writers"
+      assert query["gralkor_writers_prefixes"] == ["lens:"]
+      assert query["gralkor_excluded_writers"] == ["lens:beta"]
+
+      assert writer_search(instance, restriction) == %{
+               "edges" => ["at-edge"],
+               "nodes" => ["at-node"],
+               "episodes" => ["at-ep"]
+             }
+    end
+  end
+
+  # One group's graph holding an episode, an entity, and a fact created before
+  # 2026-06-01, at it, and after it, stored as graphiti stores creation times.
+  # The oldest records match the query most strongly; the records created at
+  # that time were written through the Lens `alpha`, the newest through `beta`.
+  defp seed_aged_graph(%{pid: pid}) do
+    instance = GraphitiPool.for(pid, "aged")
+
+    graph_query(instance, """
+    CREATE (:Episodic {uuid: 'old-ep', name: 'old', group_id: 'g', source: 'text', source_description: 'notes [lens: alpha]', content: 'amber amber amber old', entity_edges: [], created_at: '2026-01-01T00:00:00+00:00', valid_at: '2026-01-01T00:00:00+00:00', _gralkor_writers: ['lens:alpha']}),
+           (:Episodic {uuid: 'at-ep', name: 'at', group_id: 'g', source: 'text', source_description: 'notes [lens: alpha]', content: 'amber at', entity_edges: [], created_at: '2026-06-01T00:00:00+00:00', valid_at: '2026-06-01T00:00:00+00:00', _gralkor_writers: ['lens:alpha']}),
+           (:Episodic {uuid: 'new-ep', name: 'new', group_id: 'g', source: 'text', source_description: 'notes [lens: beta]', content: 'amber new', entity_edges: [], created_at: '2026-06-03T00:00:00.250000+00:00', valid_at: '2026-06-03T00:00:00+00:00', _gralkor_writers: ['lens:beta']}),
+           (o:Entity {uuid: 'old-node', name: 'amber amber amber old', group_id: 'g', summary: 'amber amber amber', created_at: '2026-01-01T00:00:00+00:00', _gralkor_writers: ['lens:alpha']}),
+           (a:Entity {uuid: 'at-node', name: 'amber at', group_id: 'g', summary: 'amber', created_at: '2026-06-01T00:00:00+00:00', _gralkor_writers: ['lens:alpha']}),
+           (n:Entity {uuid: 'new-node', name: 'amber new', group_id: 'g', summary: 'amber', created_at: '2026-06-03T00:00:00.250000+00:00', _gralkor_writers: ['lens:beta']}),
+           (o)-[:RELATES_TO {uuid: 'old-edge', name: 'OWNS', fact: 'amber amber amber old', group_id: 'g', episodes: ['old-ep'], created_at: '2026-01-01T00:00:00+00:00', _gralkor_writers: ['lens:alpha']}]->(o),
+           (a)-[:RELATES_TO {uuid: 'at-edge', name: 'OWNS', fact: 'amber at', group_id: 'g', episodes: ['at-ep'], created_at: '2026-06-01T00:00:00+00:00', _gralkor_writers: ['lens:alpha']}]->(a),
+           (n)-[:RELATES_TO {uuid: 'new-edge', name: 'OWNS', fact: 'amber new', group_id: 'g', episodes: ['new-ep'], created_at: '2026-06-03T00:00:00.250000+00:00', _gralkor_writers: ['lens:beta']}]->(n)
+    """)
+
+    %{instance: instance}
   end
 
   describe "when a memory search is run for a group > when the query exceeds the graph library's full-text limit" do
@@ -3007,6 +3133,8 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.recorded["filter_class"] = type(search_filter).__name__
                 self.recorded["writers"] = getattr(search_filter, "writers", None)
                 self.recorded["excluded_writers"] = getattr(search_filter, "excluded_writers", None)
+                since = getattr(search_filter, "since", None)
+                self.recorded["since"] = None if since is None else since.isoformat()
                 edges = [
                     _Edge("commit-1 changes parse", "CHANGES", "commit-1", "parse-fn"),
                     _Edge("commit-2 changes render", "CHANGES", "commit-2", "render-fn"),

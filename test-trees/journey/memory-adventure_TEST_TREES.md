@@ -23,6 +23,9 @@ when distinct ingestions use Lenses backed by different Destinations
 when the Journey consumer triggers a consumer-defined Reflection with a Destination output
   then its artefact is searchable through its Destination
   and its invocation callback eventually receives that exact artefact and successful delivery outcome
+  when the Journey consumer searches for memory created at or after the moment it triggered that Reflection
+    then that Reflection's artefact is returned
+    and no directly written memory is returned
 
 when a fresh agent handles a request related to stored deployment lessons
   then one MemorySearch call is made without selectors

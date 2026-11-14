@@ -5,9 +5,10 @@ defmodule Gralkor.Search do
   A search names the operator, the query, and optionally the Destinations to
   read (`destinations`, default every accessible registered Destination), the
   writers whose memory to read (`writers`, default every writer) or to leave
-  out (`excluded_writers`, default none), and ontology filters (`entity_types`,
-  `edge_types`, default no filter). The packaged `personal` Destination
-  resolves only to the current `operator_id`'s graph.
+  out (`excluded_writers`, default none), ontology filters (`entity_types`,
+  `edge_types`, default no filter), and an earliest creation time (`since`,
+  default none). The packaged `personal` Destination resolves only to the
+  current `operator_id`'s graph.
 
   Every search returns everything relevant: one Graphiti search per selected
   Destination ranks that Destination's facts, nodes, and episodes together.
@@ -78,6 +79,20 @@ defmodule Gralkor.Search do
   anything else raises `ArgumentError`, naming whether it was included or
   excluded and the value, before any Destination is searched.
 
+  ## Earliest creation time
+
+  `since` is a `DateTime` (a date and time with a time zone). Only episodes,
+  facts, and entities created at or after it are returned; without it, memory
+  created at any time can be returned. On Graphiti the restriction is decided
+  from each record's own `created_at`, inside the same graph queries as the
+  writer restrictions, before ranking and the per-Destination limits, so older
+  memory cannot crowd recent memory out. A fact keeps the creation time of its
+  first extraction even when a later episode restates it. Entity and edge type
+  filters and writers further restrict what remains.
+
+  Any other value raises `ArgumentError`, naming `since` and the value, before
+  any Destination is searched.
+
   ## Removed fields
 
   `result_type`, `artefact_id`, and `max_results` (removed in 12.0.0) and
@@ -134,6 +149,7 @@ defmodule Gralkor.Search do
     excluded_writers: [],
     entity_types: [],
     edge_types: [],
+    since: nil,
     result_type: nil,
     artefact_id: nil,
     max_results: nil,
@@ -146,7 +162,8 @@ defmodule Gralkor.Search do
   One search request. Empty `destinations` means every accessible registered
   Destination; empty `writers` means every writer; empty `excluded_writers`
   means nothing is excluded; empty `entity_types` and `edge_types` mean no
-  filter. The removed keys must stay `nil`.
+  filter; a `nil` `since` means memory created at any time. The removed keys
+  must stay `nil`.
   """
   @type t :: %__MODULE__{
           operator_id: String.t(),
@@ -156,6 +173,7 @@ defmodule Gralkor.Search do
           excluded_writers: [String.t()],
           entity_types: [String.t()],
           edge_types: [String.t()],
+          since: DateTime.t() | nil,
           result_type: nil,
           artefact_id: nil,
           max_results: nil,

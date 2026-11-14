@@ -12,7 +12,8 @@ defmodule Gralkor.Lens.Storage.InMemory do
   @type episode :: %{
           required(:content) => String.t(),
           required(:lens) => String.t(),
-          required(:source_description) => String.t()
+          required(:source_description) => String.t(),
+          required(:stored_at) => DateTime.t()
         }
   @type key :: String.t()
   @type state :: %{key() => [episode()]}
@@ -57,7 +58,12 @@ defmodule Gralkor.Lens.Storage.InMemory do
 
   @spec episode(String.t(), Lens.t(), String.t()) :: episode()
   defp episode(content, lens, source_description),
-    do: %{content: content, lens: lens.name, source_description: source_description}
+    do: %{
+      content: content,
+      lens: lens.name,
+      source_description: source_description,
+      stored_at: DateTime.utc_now()
+    }
 
   defp key(%Store{operator_id: operator_id, lens: %{destination: destination}}),
     do: Destination.graph_id(destination, operator_id)

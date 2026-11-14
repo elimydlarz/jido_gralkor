@@ -204,6 +204,7 @@ defmodule Gralkor.Client do
       |> put_search_option(:edge_types, request.edge_types)
       |> put_search_option(:writers, writers)
       |> put_search_option(:excluded_writers, excluded_writers)
+      |> put_search_option(:since, request.since)
       |> Keyword.put(:limits, Search.limits())
 
     destinations
@@ -271,6 +272,16 @@ defmodule Gralkor.Client do
 
     validate_type_filter!(:entity_types, request.entity_types)
     validate_type_filter!(:edge_types, request.edge_types)
+    validate_since!(request.since)
+  end
+
+  defp validate_since!(nil), do: :ok
+  defp validate_since!(%DateTime{}), do: :ok
+
+  defp validate_since!(since) do
+    raise ArgumentError,
+          "invalid search since (earliest creation time) #{inspect(since)}: " <>
+            "it must be a DateTime, a date and time with a time zone"
   end
 
   @writer_selectors ["direct", "unknown", "lens:*", "reflection:*"]

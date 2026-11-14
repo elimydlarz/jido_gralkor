@@ -16,7 +16,7 @@ when in-memory Destination storage receives an existing artefact identifier with
 when in-memory Destination storage looks up an absent artefact identifier
   then lookup reports not found
 
-when in-memory Destination storage is searched with no writer included
+when in-memory Destination storage is searched with neither included writers nor an earliest creation time
   then facts and episodes of the Destination are returned within their limits
   and no nodes are returned because this backend extracts no entities
 
@@ -25,3 +25,9 @@ when in-memory Destination storage is searched with writers included
   and only facts drawn from those episodes are returned
   and no nodes are returned
   but no episode by another writer contributes
+
+when in-memory Destination storage is searched with an earliest creation time
+  then only episodes stored at or after that time are returned
+  and only facts drawn from those episodes are returned
+  and no nodes are returned
+  and included and excluded writers further restrict the remaining episodes

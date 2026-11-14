@@ -20,7 +20,12 @@ defmodule Gralkor.Destination.Storage.InMemory do
 
       case Enum.find(entries, &(&1.artefact.id == artefact.id)) do
         nil ->
-          entry = %{artefact: artefact, reflection: reflection_name}
+          entry = %{
+            artefact: artefact,
+            reflection: reflection_name,
+            stored_at: DateTime.utc_now()
+          }
+
           {:ok, Map.put(state, graph_id, entries ++ [entry])}
 
         %{artefact: ^artefact} ->
@@ -49,18 +54,20 @@ defmodule Gralkor.Destination.Storage.InMemory do
     limits = Keyword.fetch!(opts, :limits)
     included = Keyword.get(opts, :writers, [])
     excluded = Keyword.get(opts, :excluded_writers, [])
+    since = Keyword.get(opts, :since)
     admitted? = &Search.admitted?([&1], included, excluded)
 
     episodes =
       destination
       |> Destination.graph_id(operator_id)
       |> LensStorage.episodes()
-      |> Enum.filter(&admitted?.(writer(&1)))
+      |> Enum.filter(&(admitted?.(writer(&1)) and stored_since?(&1, since)))
 
     reflection_episodes =
       destination
-      |> reflection_episodes(operator_id)
-      |> Enum.filter(&admitted?.("reflection:" <> &1.reflection))
+      |> artefact_entries(operator_id)
+      |> Enum.filter(&(admitted?.("reflection:" <> &1.reflection) and stored_since?(&1, since)))
+      |> Enum.map(&reflection_episode/1)
 
     {:ok,
      %{
@@ -70,6 +77,11 @@ defmodule Gralkor.Destination.Storage.InMemory do
          Enum.take(reflection_episodes ++ Enum.map(episodes, &episode_result/1), limits.episodes)
      }}
   end
+
+  defp stored_since?(_stored, nil), do: true
+
+  defp stored_since?(%{stored_at: stored_at}, since),
+    do: DateTime.compare(stored_at, since) != :lt
 
   defp writer(%{lens: lens}), do: "lens:" <> lens
   defp writer(%{writer: :direct}), do: "direct"
@@ -92,24 +104,20 @@ defmodule Gralkor.Destination.Storage.InMemory do
     }
   end
 
-  defp reflection_episodes(destination, operator_id) do
-    if Process.whereis(__MODULE__) do
-      destination
-      |> artefact_entries(operator_id)
-      |> Enum.map(fn %{artefact: artefact, reflection: reflection} ->
-        %{
-          artefact: Map.from_struct(artefact),
-          source_description: "reflection:#{reflection}",
-          reflection: reflection
-        }
-      end)
-    else
-      []
-    end
+  defp reflection_episode(%{artefact: artefact, reflection: reflection}) do
+    %{
+      artefact: Map.from_struct(artefact),
+      source_description: "reflection:#{reflection}",
+      reflection: reflection
+    }
   end
 
   defp artefact_entries(destination, operator_id) do
-    graph_id = Destination.graph_id(destination, operator_id)
-    Agent.get(__MODULE__, &Map.get(&1, graph_id, []))
+    if Process.whereis(__MODULE__) do
+      graph_id = Destination.graph_id(destination, operator_id)
+      Agent.get(__MODULE__, &Map.get(&1, graph_id, []))
+    else
+      []
+    end
   end
 end

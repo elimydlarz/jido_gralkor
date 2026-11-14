@@ -12,10 +12,12 @@ defmodule Gralkor.Destination.Storage do
 
   Options: `:limits` (`%{facts:, nodes:, episodes:}`, required), `:entity_types`,
   `:edge_types`, `:writers`, and `:excluded_writers` (optional lists of writer
-  names, see `Gralkor.Search`). Included `:writers` restrict every kind to
-  what those writers produced before ranking and limits; `:excluded_writers`
-  leave out, before ranking and limits, the excluded writers' episodes and the
-  facts and entities only they produced.
+  names, see `Gralkor.Search`), and `:since` (an optional `DateTime`). Included
+  `:writers` restrict every kind to what those writers produced before ranking
+  and limits; `:excluded_writers` leave out, before ranking and limits, the
+  excluded writers' episodes and the facts and entities only they produced;
+  `:since` keeps, before ranking and limits, only the episodes, facts, and
+  entities created at or after it.
   """
   @callback search(
               Destination.t(),

@@ -198,9 +198,11 @@ defmodule Gralkor.GraphitiPool do
   # * a `WriterSearchFilters` carrying `writers` adds to every node, edge, and
   #   FalkorDB episode full-text query a per-row check that a writer recorded
   #   in the record's own `_gralkor_writers` is included, and one carrying
-  #   `excluded_writers` a check that a recorded writer is not excluded, each
-  #   before its query's limit. Only the requested writer names and `lens:` or
-  #   `reflection:` prefixes are passed, never record identifiers.
+  #   `excluded_writers` a check that a recorded writer is not excluded, and one
+  #   carrying `since` a check that the record's own `created_at` is at or after
+  #   it, each before its query's limit. Only the requested writer names,
+  #   `lens:` or `reflection:` prefixes, and the time (as the UTC ISO 8601 text
+  #   graphiti's FalkorDB driver stores) are passed, never record identifiers.
   #
   # Without those fields every query is graphiti's own. These are graphiti
   # internals, so each wrapped or reused function is checked for its pinned
@@ -208,6 +210,8 @@ defmodule Gralkor.GraphitiPool do
   @search_filters """
   def install_search_filters(pinned_version):
       import inspect
+      from datetime import timezone
+      from pydantic import AwareDatetime
       import graphiti_core.search.search as search_module
       import graphiti_core.search.search_utils as search_utils
       import graphiti_core.driver.falkordb.operations.search_ops as falkor_search_ops
@@ -256,6 +260,7 @@ defmodule Gralkor.GraphitiPool do
       class WriterSearchFilters(SearchFilters):
           writers: list[str] | None = None
           excluded_writers: list[str] | None = None
+          since: AwareDatetime | None = None
 
       def writer_clauses(variable, filters):
           clauses = []
@@ -276,6 +281,10 @@ defmodule Gralkor.GraphitiPool do
               )
               params[names] = [writer for writer in selected if not writer.endswith(':*')]
               params[prefixes] = [writer[:-1] for writer in selected if writer.endswith(':*')]
+          since = getattr(filters, 'since', None)
+          if since is not None:
+              clauses.append(f'{variable}.created_at >= $gralkor_since')
+              params['gralkor_since'] = since.astimezone(timezone.utc).isoformat()
           return clauses, params
 
       def label_disjunction(queries, filters, provider):
@@ -320,7 +329,7 @@ defmodule Gralkor.GraphitiPool do
                   return await original(driver, query, _search_filter, group_ids, limit)
               if driver.search_interface or driver.provider != GraphProvider.FALKORDB:
                   raise RuntimeError(
-                      f'Gralkor writer search filters support only FalkorDB, not {driver.provider}'
+                      f'Gralkor writer and creation-time search filters support only FalkorDB, not {driver.provider}'
                   )
               fuzzy_query = fulltext_query(query, group_ids, driver)
               if fuzzy_query == '':
@@ -665,10 +674,12 @@ defmodule Gralkor.GraphitiPool do
     * `:excluded_writers` — optional `[String.t()]` writer names. Episodes an
       excluded writer wrote, and edges and nodes only excluded writers
       produced, are rejected; fact sources omit excluded writers' episodes.
+    * `:since` — optional `DateTime`. Only edges, nodes, and episodes whose own
+      `created_at` is at or after it are admitted.
 
-  Both are per-row checks the installed `WriterSearchFilters` adds to
+  Each is a per-row check the installed `WriterSearchFilters` adds to
   graphiti's node, edge, and FalkorDB episode full-text queries, before their
-  limits, and only the requested writer names are passed to them.
+  limits, and only the requested writer names and time are passed to them.
   """
   @spec search_memory(
           GenServer.server(),
@@ -718,6 +729,7 @@ defmodule Gralkor.GraphitiPool do
         types = [text(edge_type) for edge_type in edge_types] if edge_types else None
         included_writers = [text(writer) for writer in writers] if writers else []
         rejected_writers = [text(writer) for writer in excluded_writers] if excluded_writers else []
+        earliest = text(since) if since is not None else None
         supported_query_terms = [
           word
           for word in sanitize_falkor_fulltext_query(q).split()
@@ -783,12 +795,13 @@ defmodule Gralkor.GraphitiPool do
           return result
 
         async def search_memory():
-          if included_writers or rejected_writers:
+          if included_writers or rejected_writers or earliest is not None:
             search_filter = WriterSearchFilters(
               node_labels=labels,
               edge_types=types,
               writers=included_writers or None,
               excluded_writers=rejected_writers or None,
+              since=earliest,
             )
           else:
             search_filter = SearchFilters(node_labels=labels, edge_types=types)
@@ -825,7 +838,8 @@ defmodule Gralkor.GraphitiPool do
           "node_labels" => Keyword.get(opts, :node_labels),
           "edge_types" => Keyword.get(opts, :edge_types),
           "writers" => Keyword.get(opts, :writers),
-          "excluded_writers" => Keyword.get(opts, :excluded_writers)
+          "excluded_writers" => Keyword.get(opts, :excluded_writers),
+          "since" => since_text(Keyword.get(opts, :since))
         }
       )
 
@@ -840,6 +854,9 @@ defmodule Gralkor.GraphitiPool do
   rescue
     e in Pythonx.Error -> python_failure(e, :search_memory)
   end
+
+  defp since_text(nil), do: nil
+  defp since_text(%DateTime{} = since), do: DateTime.to_iso8601(since)
 
   defp episode_map(%{} = m) do
     episode = %{
