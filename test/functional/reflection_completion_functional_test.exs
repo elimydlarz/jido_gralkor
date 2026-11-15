@@ -450,6 +450,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     {extractions, _} = Pythonx.eval("graphiti.extractions", %{"graphiti" => graphiti})
     assert Pythonx.decode(extractions) == 2
 
+    {sources, _} = Pythonx.eval("graphiti.sources", %{"graphiti" => graphiti})
+    assert Pythonx.decode(sources) == ["json", "json"]
+
     :ok
   end
 
