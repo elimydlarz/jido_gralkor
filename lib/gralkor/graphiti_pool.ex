@@ -1419,7 +1419,6 @@ defmodule Gralkor.GraphitiPool do
                         or (
                             claim.get('episode_group_id') == gid
                             and claim.get('episode_content') == c
-                            and claim.get('episode_source') == source_value
                             and claim.get('episode_source_description') == s
                         )
                     )
