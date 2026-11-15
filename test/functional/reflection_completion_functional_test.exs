@@ -950,7 +950,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     :ok
   end
 
-  defp seed_unmarked_reflection_episode(graphiti, artefact_id, content) do
+  defp seed_unmarked_reflection_episode(graphiti, artefact_id, content, source) do
     Pythonx.eval(
       """
       import asyncio
@@ -959,13 +959,14 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       group_id = group_id.decode('utf-8') if isinstance(group_id, (bytes, bytearray)) else group_id
       uid = uuid.decode('utf-8') if isinstance(uuid, (bytes, bytearray)) else uuid
       body = content.decode('utf-8') if isinstance(content, (bytes, bytearray)) else content
+      episode_source = source.decode('utf-8') if isinstance(source, (bytes, bytearray)) else source
       asyncio._gralkor_run(graphiti.driver.execute_query(
           '''
           CREATE (episode:Episodic {
             uuid: $uuid,
-            name: 'legacy deterministic episode',
+            name: 'unmarked deterministic episode',
             group_id: $group_id,
-            source: 'json',
+            source: $source,
             source_description: 'reflection:review',
             content: $content,
             entity_edges: [],
