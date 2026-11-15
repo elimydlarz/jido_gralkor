@@ -977,6 +977,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           ''',
           uuid=uid,
           content=body,
+          source=episode_source,
           created_at=now,
           valid_at=now,
           group_id=group_id,
@@ -986,6 +987,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
         "graphiti" => graphiti,
         "uuid" => artefact_id,
         "content" => content,
+        "source" => source,
         "group_id" => Client.sanitize_group_id("observations")
       }
     )
