@@ -12,6 +12,7 @@ where Graphiti stores a Destination artefact output
   when a new artefact is written with its stable identifier
     then Graphiti creates one episode under a deterministic UUID derived from that artefact identifier
     and the episode body contains exactly the artefact identifier and payload
+    and the episode is stored as a structured record
     and Graphiti records durable extraction completion only after every graph effect succeeds
   when that artefact is written again after an uncertain response
     then exactly one episode carrying that artefact remains searchable
