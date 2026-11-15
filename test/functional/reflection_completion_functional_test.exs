@@ -183,15 +183,15 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
   describe "where Graphiti stores a Destination artefact output > when that artefact is written again after an uncertain response > while the episode exists but extraction completion was not recorded" do
     test "then canonical lookup retains the exact episode artefact as incomplete rather than reporting success" do
-      assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/0)
+      assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/1, ["json"])
     end
 
     test "and public search excludes that incomplete artefact's episode" do
-      assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/0)
+      assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/1, ["json"])
     end
 
     test "and Graphiti resumes the normal extraction path before reporting success" do
-      assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/0)
+      assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/1, ["json"])
     end
   end
 
