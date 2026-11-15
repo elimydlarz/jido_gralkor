@@ -823,15 +823,14 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
         :facts,
         "Atlas Deployment requires Rollback Checkpoint",
         fn facts ->
-          selected =
-            Enum.filter(facts, &String.contains?(&1.fact.fact, "Rollback Checkpoint"))
+          selected = Enum.filter(facts, &deployment_policy_fact?/1)
 
           every_fact_has_episode_id?(selected) and
             every_fact_has_source_kind?(selected, "document") and
             any_fact_has_source_description?(selected, "deployment policy")
         end
       )
-      |> Enum.filter(&String.contains?(&1.fact.fact, "Rollback Checkpoint"))
+      |> Enum.filter(&deployment_policy_fact?/1)
 
     structured_record_facts =
       attributed_facts(
@@ -1299,6 +1298,11 @@ defmodule Gralkor.MemoryAdventureJourneyTest do
     Enum.all?(results, fn %{fact: fact} ->
       fact.sources != [] and Enum.all?(fact.sources, &is_binary(&1.id))
     end)
+  end
+
+  defp deployment_policy_fact?(%{fact: fact}) do
+    String.contains?(fact.fact, "Rollback Checkpoint") and
+      Enum.any?(fact.sources, &String.contains?(&1.source_description, "deployment policy"))
   end
 
   defp every_fact_has_source_kind?([], _source_kind), do: false
