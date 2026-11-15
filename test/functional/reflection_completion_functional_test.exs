@@ -99,6 +99,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           :failed_extraction,
           :upgrade_partial,
           :preclaim_incomplete,
+          :legacy_preclaim_incomplete,
           :shared
         ],
         &{__MODULE__, &1}
