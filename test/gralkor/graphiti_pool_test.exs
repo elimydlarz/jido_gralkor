@@ -678,8 +678,16 @@ defmodule Gralkor.GraphitiPoolTest do
       assert :ok =
                GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "episode-uuid")
 
+      assert :ok =
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
+                 uuid: "episode-uuid",
+                 source_kind: :structured_record
+               )
+
       {count, _} = Pythonx.eval("g.extractions", %{"g" => g})
       assert Pythonx.decode(count) == 1
+
+      assert {:ok, %{"source" => "text"}} = GraphitiPool.get_episode(pid, "g1", "episode-uuid")
       GenServer.stop(pid)
     end
   end
