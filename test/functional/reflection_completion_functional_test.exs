@@ -962,7 +962,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             uuid: $uuid,
             name: 'legacy deterministic episode',
             group_id: $group_id,
-            source: 'text',
+            source: 'json',
             source_description: 'reflection:review',
             content: $content,
             entity_edges: [],
