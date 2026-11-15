@@ -1511,7 +1511,6 @@ defmodule Gralkor.GraphitiPool do
                             equal = (
                                 existing.group_id == gid
                                 and existing.content == c
-                                and existing.source == episode_type
                                 and existing.source_description == s
                             )
                             if not equal:
