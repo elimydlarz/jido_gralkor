@@ -1394,7 +1394,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       end),
       Task.async(fn ->
         GraphitiPool.add_episode(second_pool, "observations", "same", "source", nil,
-          uuid: "embedded-shared-equal"
+          uuid: "embedded-shared-equal",
+          source_kind: :structured_record
         )
       end)
     ]
