@@ -1106,6 +1106,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             MATCH (episode:Episodic {uuid: $uuid})
             MATCH (claim:_GralkorEpisodeClaim {uuid: $uuid})
             RETURN episode.content AS episode_content,
+                   episode.source AS episode_source,
                    episode._gralkor_extraction_complete AS complete,
                    claim.content AS claim_content
             ''',
@@ -1120,7 +1121,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
              %{
                "claim_content" => content,
                "complete" => true,
-               "episode_content" => content
+               "episode_content" => content,
+               "episode_source" => source
              },
              1
            ]
