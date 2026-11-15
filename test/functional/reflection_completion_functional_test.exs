@@ -270,7 +270,9 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
 
   describe "where Graphiti stores a Destination artefact output > when upgrading from an unmarked pre-completion-marker artefact" do
     test "then it remains hidden until an explicit replay or migration establishes durable extraction completion" do
-      assert_verified(:preclaim_incomplete, &assert_preclaim_incomplete_contract/0)
+      assert_verified(:legacy_preclaim_incomplete, &assert_preclaim_incomplete_contract/1, [
+        "text"
+      ])
     end
 
     test "and upgrade behavior does not expose a possibly partial episode as completed" do
