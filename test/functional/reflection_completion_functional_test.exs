@@ -803,7 +803,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                content,
                "reflection:review",
                Gralkor.DefaultOntology,
-               uuid: artefact_id
+               uuid: artefact_id,
+               source_kind: :structured_record
              )
 
     assert {:error, :not_found} =
@@ -854,7 +855,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                content,
                "reflection:review",
                Gralkor.DefaultOntology,
-               uuid: artefact_id
+               uuid: artefact_id,
+               source_kind: :structured_record
              )
 
     assert {:ok,
