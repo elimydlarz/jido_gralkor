@@ -3,6 +3,7 @@ Unit: destination-graphiti-artefact-storage (src: lib/gralkor/destination/storag
 when Graphiti Destination storage receives an artefact
   then it uses the output Destination group, serialized producer-independent artefact content, Reflection source provenance, and output ontology
   and it supplies the artefact identifier as the requested episode UUID
+  and it supplies the artefact as a structured record
 
 when Graphiti Destination storage looks up an artefact identifier
   while the matching episode contains that artefact and durable extraction completion is recorded
