@@ -19,7 +19,7 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                Graphiti.put_artefact(output(), "review", "operator-one", artefact, add_episode)
 
       assert_receive {:add_episode, "observations", content, "reflection:review",
-                      Gralkor.DefaultOntology, [uuid: "stable-id"]}
+                      Gralkor.DefaultOntology, _opts}
 
       assert Jason.decode!(content) == %{
                "id" => "stable-id",
@@ -40,7 +40,27 @@ defmodule Gralkor.Destination.Storage.GraphitiArtefactTest do
                Graphiti.put_artefact(output(), "review", "operator-one", artefact, add_episode)
 
       assert_receive {:add_episode, "observations", _content, "reflection:review",
-                      Gralkor.DefaultOntology, [uuid: "stable-id"]}
+                      Gralkor.DefaultOntology, opts}
+
+      assert opts[:uuid] == "stable-id"
+    end
+
+    test "and it supplies the artefact as a structured record" do
+      artefact = artefact()
+      test_pid = self()
+
+      add_episode = fn group, content, source, ontology, opts ->
+        send(test_pid, {:add_episode, group, content, source, ontology, opts})
+        :ok
+      end
+
+      assert :ok =
+               Graphiti.put_artefact(output(), "review", "operator-one", artefact, add_episode)
+
+      assert_receive {:add_episode, "observations", _content, "reflection:review",
+                      Gralkor.DefaultOntology, opts}
+
+      assert opts[:source_kind] == :structured_record
     end
   end
 
