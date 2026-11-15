@@ -1576,6 +1576,7 @@ defmodule Gralkor.PersonalGraphMigrationFunctionalTest do
     assert {:ok, manifest} = PersonalGraphMigration.plan(context.connection, ["owner"], %{})
     target = hd(manifest["graphs"])["target_inventory"]
     assert episode(target, artefact.id)["_gralkor_extraction_complete"] == true
+    assert episode(target, artefact.id)["source"] == "text"
 
     assert Enum.count(
              target["nodes"],
