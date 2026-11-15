@@ -154,6 +154,10 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
       assert_verified(:fresh, &assert_fresh_graphiti_contract/0)
     end
 
+    test "and the episode is stored as a structured record" do
+      assert_verified(:fresh, &assert_fresh_graphiti_contract/0)
+    end
+
     test "and Graphiti records durable extraction completion only after every graph effect succeeds" do
       assert_verified(:fresh, &assert_fresh_graphiti_contract/0)
     end
