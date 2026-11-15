@@ -1013,14 +1013,14 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     Pythonx.decode(unmarked)
   end
 
-  defp assert_preclaim_incomplete_contract do
+  defp assert_preclaim_incomplete_contract(source) do
     {pool, graphiti} = start_preclaim_graphiti_pool(:reflection_preclaim_incomplete_graphiti)
     reflection = hd(Application.fetch_env!(:jido_gralkor, :reflections))
     artefact_id = Artefact.id_for("operator-one", "ingestion-one", "review")
     artefact = Artefact.new(artefact_id, %{"summary" => "stored"})
     content = Jason.encode!(Map.from_struct(artefact))
 
-    seed_unmarked_reflection_episode(graphiti, artefact_id, content)
+    seed_unmarked_reflection_episode(graphiti, artefact_id, content, source)
 
     assert {:error, {:episode_conflict, ^artefact_id}} =
              GraphitiPool.add_episode(
@@ -1029,7 +1029,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                "conflicting",
                "reflection:review",
                nil,
-               uuid: artefact_id
+               uuid: artefact_id,
+               source_kind: Map.fetch!(%{"json" => :structured_record, "text" => :document}, source)
              )
 
     assert {:error, {:incomplete_artefact, ^artefact}} =
