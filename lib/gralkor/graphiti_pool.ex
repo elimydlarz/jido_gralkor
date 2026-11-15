@@ -1393,7 +1393,6 @@ defmodule Gralkor.GraphitiPool do
                                e.uuid AS episode_uuid,
                                e.group_id AS episode_group_id,
                                e.content AS episode_content,
-                               e.source AS episode_source,
                                e.source_description AS episode_source_description
                         ''',
                         uuid=uid,
