@@ -1427,7 +1427,6 @@ defmodule Gralkor.GraphitiPool do
                     equal = (
                         claim['group_id'] == gid
                         and claim['content'] == c
-                        and claim['source'] == source_value
                         and claim['source_description'] == s
                     )
                     if not equal:
