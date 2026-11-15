@@ -428,15 +428,16 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
             MATCH (episode:Episodic)
             RETURN episode.uuid AS uuid,
                    episode.group_id AS group_id,
-                   episode.content AS content
+                   episode.content AS content,
+                   episode.source AS source
             '''
         ))
-        [[record['uuid'], record['group_id'], record['content']] for record in records]
+        [[record['uuid'], record['group_id'], record['content'], record['source']] for record in records]
         """,
         %{"graphiti" => graphiti}
       )
 
-    assert [[episode_uuid, group_id, content]] = Pythonx.decode(episodes)
+    assert [[episode_uuid, group_id, content, "json"]] = Pythonx.decode(episodes)
     assert episode_uuid == Artefact.id_for("operator-one", "ingestion-one", "review")
     assert episode_uuid == artefact_id
     assert group_id == Client.sanitize_group_id("observations")
