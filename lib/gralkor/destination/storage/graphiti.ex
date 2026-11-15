@@ -31,7 +31,8 @@ defmodule Gralkor.Destination.Storage.Graphiti do
            Jason.encode!(Map.from_struct(artefact)),
            "reflection:#{reflection_name}",
            output.ontology,
-           uuid: artefact.id
+           uuid: artefact.id,
+           source_kind: :structured_record
          ) do
       {:error, {:episode_conflict, id}} -> {:error, {:artefact_conflict, id}}
       outcome -> outcome
