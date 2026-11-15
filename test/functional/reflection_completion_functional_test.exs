@@ -900,7 +900,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
     artefact = Artefact.new(artefact_id, %{"summary" => "stored"})
     content = Jason.encode!(Map.from_struct(artefact))
 
-    seed_unmarked_reflection_episode(graphiti, artefact_id, content)
+    seed_unmarked_reflection_episode(graphiti, artefact_id, content, "text")
 
     Pythonx.eval(
       """
