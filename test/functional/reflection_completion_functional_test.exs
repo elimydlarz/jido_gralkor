@@ -305,6 +305,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
           def __init__(self):
               self.driver = FalkorDriver(falkor_db=database, database=gid)
               self.extractions = 0
+              self.sources = []
               self.fail_next_effect = True
 
           async def add_episode(self, **kwargs):
@@ -313,6 +314,7 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
               from graphiti_core.graphiti import add_nodes_and_edges_bulk
               from graphiti_core.nodes import EntityNode, EpisodicNode
               self.extractions += 1
+              self.sources.append(kwargs['source'].value)
               episode = await EpisodicNode.get_by_uuid(self.driver, kwargs['uuid'])
               await episode.save(self.driver)
               now = datetime.now(timezone.utc)
