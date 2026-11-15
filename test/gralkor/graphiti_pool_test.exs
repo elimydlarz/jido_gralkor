@@ -624,18 +624,21 @@ defmodule Gralkor.GraphitiPoolTest do
                GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "partial-uuid")
 
       assert :ok =
-               GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "partial-uuid")
+               GraphitiPool.add_episode(pid, "g1", "content", "source", nil,
+                 uuid: "partial-uuid",
+                 source_kind: :structured_record
+               )
 
       assert :ok =
                GraphitiPool.add_episode(pid, "g1", "content", "source", nil, uuid: "partial-uuid")
 
       {proof, _} =
         Pythonx.eval(
-          "[len(g.driver.episodes), g.extractions, g.completed_effects, 'partial-uuid' in g.driver._gralkor_completed_episode_uuids]",
+          "[len(g.driver.episodes), g.extractions, g.completed_effects, 'partial-uuid' in g.driver._gralkor_completed_episode_uuids, g.driver.episodes['partial-uuid'].source.value]",
           %{"g" => g}
         )
 
-      assert Pythonx.decode(proof) == [1, 2, 1, true]
+      assert Pythonx.decode(proof) == [1, 2, 1, true, "text"]
 
       GenServer.stop(pid)
     end
