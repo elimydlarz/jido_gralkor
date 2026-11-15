@@ -1033,7 +1033,8 @@ defmodule Gralkor.ReflectionCompletionFunctionalTest do
                "reflection:review",
                nil,
                uuid: artefact_id,
-               source_kind: Map.fetch!(%{"json" => :structured_record, "text" => :document}, source)
+               source_kind:
+                 Map.fetch!(%{"json" => :structured_record, "text" => :document}, source)
              )
 
     assert {:error, {:incomplete_artefact, ^artefact}} =
