@@ -209,9 +209,11 @@ defmodule Gralkor.GraphitiPool do
   # signature first and nothing is wrapped unless every check passes.
   @search_filters """
   def install_search_filters(pinned_version):
+      import contextvars
       import inspect
       from datetime import timezone
       from pydantic import AwareDatetime
+      import falkordb.asyncio.graph as falkordb_graph
       import graphiti_core.search.search as search_module
       import graphiti_core.search.search_utils as search_utils
       import graphiti_core.driver.falkordb.operations.search_ops as falkor_search_ops
@@ -227,9 +229,10 @@ defmodule Gralkor.GraphitiPool do
               f'from graphiti-core {pinned_version}; found {found}'
           )
 
-      def required(module, name, expected):
-          qualified = f'{module.__name__}.{name}'
-          function = getattr(module, name, None)
+      def required(owner, name, expected):
+          prefix = owner.__name__ if inspect.ismodule(owner) else f'{owner.__module__}.{owner.__qualname__}'
+          qualified = f'{prefix}.{name}'
+          function = getattr(owner, name, None)
           if not callable(function):
               unsupported(qualified, expected, 'no such function')
           parameters = list(inspect.signature(function).parameters)
@@ -239,23 +242,44 @@ defmodule Gralkor.GraphitiPool do
 
       filter_parameters = ['filters', 'provider']
       episode_parameters = ['driver', 'query', '_search_filter', 'group_ids', 'limit']
+      similarity_parameters = [
+          'driver', 'search_vector', 'source_node_uuid', 'target_node_uuid',
+          'search_filter', 'group_ids', 'limit', 'min_score',
+      ]
       targets = [
           (search_utils, 'node_search_filter_query_constructor', filter_parameters, 'node'),
           (search_utils, 'edge_search_filter_query_constructor', filter_parameters, 'edge'),
           (falkor_search_ops, 'node_search_filter_query_constructor', filter_parameters, 'node'),
           (falkor_search_ops, 'edge_search_filter_query_constructor', filter_parameters, 'edge'),
           (search_module, 'episode_fulltext_search', episode_parameters, 'episode'),
+          (search_module, 'edge_similarity_search', similarity_parameters, 'similarity'),
+          (search_utils, 'get_entity_edge_return_query', ['provider'], 'edge_columns'),
+          (search_utils, 'get_entity_node_return_query', ['provider'], 'node_columns'),
+          (falkordb_graph.AsyncGraph, 'query', ['self', 'q', 'params', 'timeout'], 'query'),
       ]
       originals = [
-          (module, name, required(module, name, expected), kind)
-          for module, name, expected, kind in targets
+          (owner, name, required(owner, name, expected), kind)
+          for owner, name, expected, kind in targets
       ]
       fulltext_query = required(search_utils, 'fulltext_query', ['query', 'group_ids', 'driver'])
       get_nodes_query = required(search_utils, 'get_nodes_query', ['name', 'query', 'limit', 'provider'])
       get_episodic_node_from_record = required(search_utils, 'get_episodic_node_from_record', ['record'])
+      get_entity_edge_from_record = required(search_utils, 'get_entity_edge_from_record', ['record', 'provider'])
+      get_vector_cosine_func_query = required(search_utils, 'get_vector_cosine_func_query', ['vec1', 'vec2', 'provider'])
+      own_edge_constructor = required(search_utils, 'edge_search_filter_query_constructor', filter_parameters)
       episode_return = getattr(search_utils, 'EPISODIC_NODE_RETURN', None)
       if not isinstance(episode_return, str):
           unsupported('graphiti_core.search.search_utils.EPISODIC_NODE_RETURN', [], 'no such query')
+      column_replacements = {
+          'edge_columns': ('properties(e) AS attributes', 'e {.*, fact_embedding: NULL} AS attributes'),
+          'node_columns': ('properties(n) AS attributes', 'n {.*, name_embedding: NULL} AS attributes'),
+      }
+      for owner, name, function, kind in originals:
+          if kind in column_replacements:
+              replaced = column_replacements[kind][0]
+              if function(GraphProvider.FALKORDB).count(replaced) != 1:
+                  unsupported(f'{owner.__name__}.{name}', ['provider'], f'a FalkorDB query without {replaced}')
+      read_timeout = contextvars.ContextVar('gralkor_read_timeout', default=None)
 
       class WriterSearchFilters(SearchFilters):
           writers: list[str] | None = None
