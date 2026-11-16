@@ -108,7 +108,7 @@ Gralkor.Client.search(agent_server, %Gralkor.Search{
 })
 ```
 
-Each distinct Destination is searched once, concurrently, through one Graphiti `search_` call that ranks edges, nodes, and episodes together (Graphiti's `COMBINED_HYBRID_SEARCH_RRF` recipe without its community layer: edges and nodes by BM25 plus cosine similarity with reciprocal rank fusion, episodes by BM25; the query is embedded once). The result is one map per Destination, in selected order:
+Each distinct Destination is searched once, concurrently, through one Graphiti `search_` call that ranks edges, nodes, and episodes together (Graphiti's `COMBINED_HYBRID_SEARCH_RRF` recipe without its community layer: edges and nodes by BM25 plus cosine similarity with reciprocal rank fusion, episodes by BM25; the query is embedded once). Once the Destination's graph has built its fact and entity vector indexes (created the first time the graph is used), the cosine part reads the nearest candidates from them and applies every restriction below in the same query, falling back to comparing every stored embedding when too few candidates pass. The result is one map per Destination, in selected order:
 
 ```elixir
 {:ok,

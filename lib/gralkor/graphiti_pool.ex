@@ -188,6 +188,77 @@ defmodule Gralkor.GraphitiPool do
                             [_, version] -> version
                           end)
 
+  @vector_indexes """
+  from graphiti_core.driver.driver import GraphProvider
+  VECTOR_INDEXES = {
+      'fact': {'entitytype': 'RELATIONSHIP', 'label': 'RELATES_TO', 'field': 'fact_embedding',
+               'pattern': '()-[e:RELATES_TO]-() ON (e.fact_embedding)'},
+      'entity': {'entitytype': 'NODE', 'label': 'Entity', 'field': 'name_embedding',
+                 'pattern': '(n:Entity) ON (n.name_embedding)'},
+  }
+  NEAREST_FLOOR = 2000
+  NEAREST_PER_RESULT = 20
+  VECTOR_INDEX_STATUS = (
+      'CALL db.indexes() YIELD label, types, options, entitytype, status\\n'
+      'WHERE label = $gralkor_label AND entitytype = $gralkor_entitytype\\n'
+      'RETURN types, options, status'
+  )
+
+  def nearest_count(limit):
+      return max(NEAREST_FLOOR, NEAREST_PER_RESULT * limit)
+
+  async def vector_index(driver, kind):
+      spec = VECTOR_INDEXES[kind]
+      records, _, _ = await driver.execute_query(
+          VECTOR_INDEX_STATUS,
+          gralkor_label=spec['label'],
+          gralkor_entitytype=spec['entitytype'],
+          routing_='r',
+      )
+      rows = [record for record in records if 'VECTOR' in ((record['types'] or {}).get(spec['field']) or [])]
+      if not rows:
+          return None
+      options = (rows[0]['options'] or {}).get(spec['field']) or {}
+      return {
+          'built': any(row['status'] == 'OPERATIONAL' for row in rows),
+          'dimension': options.get('dimension'),
+          'similarity': options.get('similarityFunction'),
+      }
+
+  async def create_vector_indexes(g):
+      driver = getattr(g, 'driver', None)
+      embedder = getattr(g, 'embedder', None)
+      if (
+          getattr(driver, 'provider', None) != GraphProvider.FALKORDB
+          or getattr(driver, 'search_interface', None)
+          or embedder is None
+      ):
+          return {'created': [], 'dimension': None}
+      dimension = int(embedder.config.embedding_dim)
+      created = []
+      mismatched = []
+      for kind in ('fact', 'entity'):
+          spec = VECTOR_INDEXES[kind]
+          index = await vector_index(driver, kind)
+          name = spec['label'] + '.' + spec['field']
+          if index is None:
+              result = await driver.execute_query(
+                  'CREATE VECTOR INDEX FOR ' + spec['pattern']
+                  + ' OPTIONS {dimension: ' + str(dimension) + ", similarityFunction: 'cosine'}"
+              )
+              if result is not None:
+                  created.append(name)
+          elif index['dimension'] != dimension or index['similarity'] != 'cosine':
+              mismatched.append(
+                  f"graph {driver._database}: the {name} vector index compares {index['similarity']} "
+                  f"at {index['dimension']} dimensions, but the embedder writes {dimension}; drop it with "
+                  f"DROP VECTOR INDEX FOR {spec['pattern']} and build the graph's indexes again"
+              )
+      if mismatched:
+          raise RuntimeError('; '.join(mismatched))
+      return {'created': created, 'dimension': dimension}
+  """
+
   # graphiti-core 0.31.2's SearchFilters has no writer filter, its episode
   # full-text search ignores the filter entirely, and it renders several node
   # labels as the label expression `n:A|B`, which FalkorDB rejects. Pool start
@@ -206,6 +277,14 @@ defmodule Gralkor.GraphitiPool do
   # * with `since`, fact similarity search reads facts through the creation-time
   #   index before it binds their entities, and episode full-text search checks
   #   the node the full-text index yields instead of matching it again;
+  # * once the graph's vector index for facts or entities is built, fact and
+  #   entity similarity searches read their nearest candidates from it and
+  #   filter them in the same query; when fewer pass than the search keeps they
+  #   answer with graphiti's own query (the creation-time one with `since`),
+  #   unless the farthest candidate already scores at or below the minimum;
+  # * fact searches that name facts or their entities never ask the index;
+  # * entity similarity search is wrapped where ingestion's entity
+  #   deduplication binds it, in node_operations, as well;
   # * fact and entity queries return every property but the embedding;
   # * the FalkorDB client's query takes the query timeout a search sets.
   #
@@ -213,6 +292,7 @@ defmodule Gralkor.GraphitiPool do
   # internals, so each wrapped or reused function is checked for its pinned
   # signature first and nothing is wrapped unless every check passes.
   @search_filters """
+  #{@vector_indexes}
   def install_search_filters(pinned_version):
       import contextvars
       import inspect
@@ -221,8 +301,11 @@ defmodule Gralkor.GraphitiPool do
       import falkordb.asyncio.graph as falkordb_graph
       import graphiti_core.search.search as search_module
       import graphiti_core.search.search_utils as search_utils
+      import graphiti_core.utils.maintenance.node_operations as node_operations
+      import graphiti_core.edges as edges_module
       import graphiti_core.driver.falkordb.operations.search_ops as falkor_search_ops
       from graphiti_core.driver.driver import GraphProvider
+      from graphiti_core.errors import EdgeNotFoundError
       from graphiti_core.search.search_filters import SearchFilters
       installed = getattr(search_utils, '_gralkor_search_filters', None)
       if installed is not None:
@@ -251,6 +334,7 @@ defmodule Gralkor.GraphitiPool do
           'driver', 'search_vector', 'source_node_uuid', 'target_node_uuid',
           'search_filter', 'group_ids', 'limit', 'min_score',
       ]
+      node_similarity_parameters = ['driver', 'search_vector', 'search_filter', 'group_ids', 'limit', 'min_score']
       targets = [
           (search_utils, 'node_search_filter_query_constructor', filter_parameters, 'node'),
           (search_utils, 'edge_search_filter_query_constructor', filter_parameters, 'edge'),
@@ -258,6 +342,11 @@ defmodule Gralkor.GraphitiPool do
           (falkor_search_ops, 'edge_search_filter_query_constructor', filter_parameters, 'edge'),
           (search_module, 'episode_fulltext_search', episode_parameters, 'episode'),
           (search_module, 'edge_similarity_search', similarity_parameters, 'similarity'),
+          (search_module, 'node_similarity_search', node_similarity_parameters, 'entity_similarity'),
+          (node_operations, 'node_similarity_search', node_similarity_parameters, 'entity_similarity'),
+          (edges_module.EntityEdge, 'get_by_uuids', ['driver', 'uuids'], 'fact_fetch'),
+          (edges_module.EntityEdge, 'load_fact_embedding', ['self', 'driver'], 'fact_embedding'),
+          (edges_module.Edge, 'delete_by_uuids', ['driver', 'uuids'], 'relationship_delete'),
           (search_utils, 'get_entity_edge_return_query', ['provider'], 'edge_columns'),
           (search_utils, 'get_entity_node_return_query', ['provider'], 'node_columns'),
           (falkordb_graph.AsyncGraph, 'query', ['self', 'q', 'params', 'timeout'], 'query'),
@@ -270,6 +359,9 @@ defmodule Gralkor.GraphitiPool do
       get_nodes_query = required(search_utils, 'get_nodes_query', ['name', 'query', 'limit', 'provider'])
       get_episodic_node_from_record = required(search_utils, 'get_episodic_node_from_record', ['record'])
       get_entity_edge_from_record = required(search_utils, 'get_entity_edge_from_record', ['record', 'provider'])
+      get_entity_node_from_record = required(search_utils, 'get_entity_node_from_record', ['record', 'provider'])
+      entity_edge_return = required(edges_module, 'get_entity_edge_return_query', ['provider'])
+      entity_edge_from_record = required(edges_module, 'get_entity_edge_from_record', ['record', 'provider'])
       get_vector_cosine_func_query = required(search_utils, 'get_vector_cosine_func_query', ['vec1', 'vec2', 'provider'])
       own_edge_constructor = required(search_utils, 'edge_search_filter_query_constructor', filter_parameters)
       episode_return = getattr(search_utils, 'EPISODIC_NODE_RETURN', None)
@@ -388,10 +480,84 @@ defmodule Gralkor.GraphitiPool do
           episode_fulltext_search._gralkor_original = original
           return episode_fulltext_search
 
+      def on_falkordb(driver):
+          return not driver.search_interface and driver.provider == GraphProvider.FALKORDB
+
+      def names_records(search_filter, source_node_uuid, target_node_uuid):
+          return (
+              source_node_uuid is not None
+              or target_node_uuid is not None
+              or getattr(search_filter, 'edge_uuids', None) is not None
+              or getattr(search_filter, 'edge_source_node_uuids', None) is not None
+              or getattr(search_filter, 'edge_target_node_uuids', None) is not None
+          )
+
+      def answered(records, k, limit, min_score):
+          if len(records) >= limit:
+              return True
+          if not records:
+              return False
+          return records[0]['gralkor_reached'] >= k and (2 - records[0]['gralkor_farthest']) / 2 <= min_score
+
+      def nearest(procedure, label, field, yielded, variable):
+          return (
+              f"CALL db.idx.vector.{procedure}('{label}', '{field}', $gralkor_k, vecf32($search_vector))"
+              + f'\\nYIELD {yielded}, score AS gralkor_distance'
+              + f'\\nWITH collect([{yielded}, gralkor_distance]) AS gralkor_candidates, '
+              + 'count(gralkor_distance) AS gralkor_reached, max(gralkor_distance) AS gralkor_farthest'
+              + '\\nUNWIND gralkor_candidates AS gralkor_candidate'
+              + f'\\nWITH gralkor_candidate[0] AS {variable}, (2 - gralkor_candidate[1])/2 AS score, '
+              + 'gralkor_reached, gralkor_farthest'
+          )
+
       def similarity_search(original):
           async def edge_similarity_search(
               driver, search_vector, source_node_uuid, target_node_uuid, search_filter,
               group_ids=None, limit=search_utils.RELEVANT_SCHEMA_LIMIT, min_score=search_utils.DEFAULT_MIN_SCORE,
+          ):
+              arguments = (
+                  driver, search_vector, source_node_uuid, target_node_uuid, search_filter,
+                  group_ids, limit, min_score,
+              )
+              if not on_falkordb(driver) or names_records(search_filter, source_node_uuid, target_node_uuid):
+                  return await own_fact_query(*arguments)
+              index = await vector_index(driver, 'fact')
+              if index is None or not index['built']:
+                  return await own_fact_query(*arguments)
+              k = nearest_count(limit)
+              fact_clauses, params = writer_clauses('e', search_filter)
+              own_queries, own_params = own_edge_constructor(search_filter, driver.provider)
+              entity_clauses = ['n:Entity', 'm:Entity'] + label_disjunction(list(own_queries), search_filter, driver.provider)
+              params.update(own_params)
+              if group_ids is not None:
+                  fact_clauses.append('e.group_id IN $group_ids')
+                  params['group_ids'] = group_ids
+              cypher = (
+                  nearest('queryRelationships', 'RELATES_TO', 'fact_embedding', 'relationship', 'e')
+                  + '\\nWHERE ' + ' AND '.join(['score > $min_score'] + fact_clauses)
+                  + '\\nWITH e, score, gralkor_reached, gralkor_farthest, startNode(e) AS n, endNode(e) AS m'
+                  + '\\nWHERE ' + ' AND '.join(entity_clauses)
+                  + '\\nRETURN\\n'
+                  + search_utils.get_entity_edge_return_query(driver.provider)
+                  + ',\\ngralkor_reached, gralkor_farthest'
+                  + '\\nORDER BY score DESC\\nLIMIT $limit'
+              )
+              records, _, _ = await driver.execute_query(
+                  cypher,
+                  search_vector=search_vector,
+                  gralkor_k=k,
+                  limit=limit,
+                  min_score=min_score,
+                  routing_='r',
+                  **params,
+              )
+              if answered(records, k, limit, min_score):
+                  return [get_entity_edge_from_record(record, driver.provider) for record in records]
+              return await own_fact_query(*arguments)
+
+          async def own_fact_query(
+              driver, search_vector, source_node_uuid, target_node_uuid, search_filter,
+              group_ids, limit, min_score,
           ):
               if getattr(search_filter, 'since', None) is None:
                   return await original(
@@ -437,6 +603,99 @@ defmodule Gralkor.GraphitiPool do
           edge_similarity_search._gralkor_original = original
           return edge_similarity_search
 
+      def entity_similarity_search(original):
+          async def node_similarity_search(
+              driver, search_vector, search_filter, group_ids=None,
+              limit=search_utils.RELEVANT_SCHEMA_LIMIT, min_score=search_utils.DEFAULT_MIN_SCORE,
+          ):
+              arguments = (driver, search_vector, search_filter, group_ids, limit, min_score)
+              if not on_falkordb(driver):
+                  return await original(*arguments)
+              index = await vector_index(driver, 'entity')
+              if index is None or not index['built']:
+                  return await original(*arguments)
+              k = nearest_count(limit)
+              clauses, params = search_utils.node_search_filter_query_constructor(search_filter, driver.provider)
+              clauses = ['score > $min_score'] + list(clauses)
+              if group_ids is not None:
+                  clauses.append('n.group_id IN $group_ids')
+                  params['group_ids'] = group_ids
+              cypher = (
+                  nearest('queryNodes', 'Entity', 'name_embedding', 'node', 'n')
+                  + '\\nWHERE ' + ' AND '.join(clauses)
+                  + '\\nRETURN\\n'
+                  + search_utils.get_entity_node_return_query(driver.provider)
+                  + ',\\ngralkor_reached, gralkor_farthest'
+                  + '\\nORDER BY score DESC\\nLIMIT $limit'
+              )
+              records, _, _ = await driver.execute_query(
+                  cypher,
+                  search_vector=search_vector,
+                  gralkor_k=k,
+                  limit=limit,
+                  min_score=min_score,
+                  routing_='r',
+                  **params,
+              )
+              if answered(records, k, limit, min_score):
+                  return [get_entity_node_from_record(record, driver.provider) for record in records]
+              return await original(*arguments)
+          node_similarity_search._gralkor_original = original
+          return node_similarity_search
+
+      def by_uuid_index(driver):
+          return not driver.graph_operations_interface and driver.provider == GraphProvider.FALKORDB
+
+      def fact_fetch(original):
+          own = vars(edges_module.EntityEdge)['get_by_uuids'].__func__
+          async def get_by_uuids(cls, driver, uuids):
+              if not by_uuid_index(driver) or len(uuids) == 0:
+                  return await own(cls, driver, uuids)
+              records, _, _ = await driver.execute_query(
+                  'MATCH ()-[e:RELATES_TO]->()'
+                  + '\\nWHERE e.uuid IN $uuids'
+                  + '\\nWITH e, startNode(e) AS n, endNode(e) AS m'
+                  + '\\nWHERE n:Entity AND m:Entity'
+                  + '\\nRETURN\\n'
+                  + entity_edge_return(driver.provider),
+                  uuids=uuids,
+                  routing_='r',
+              )
+              return [entity_edge_from_record(record, driver.provider) for record in records]
+          get_by_uuids._gralkor_original = original
+          return classmethod(get_by_uuids)
+
+      def fact_embedding(original):
+          async def load_fact_embedding(self, driver):
+              if not by_uuid_index(driver):
+                  return await original(self, driver)
+              records, _, _ = await driver.execute_query(
+                  'MATCH ()-[e:RELATES_TO {uuid: $uuid}]->()'
+                  + '\\nWITH e, startNode(e) AS n, endNode(e) AS m'
+                  + '\\nWHERE n:Entity AND m:Entity'
+                  + '\\nRETURN e.fact_embedding AS fact_embedding',
+                  uuid=self.uuid,
+                  routing_='r',
+              )
+              if len(records) == 0:
+                  raise EdgeNotFoundError(self.uuid)
+              self.fact_embedding = records[0]['fact_embedding']
+          load_fact_embedding._gralkor_original = original
+          return load_fact_embedding
+
+      def relationship_delete(original):
+          own = vars(edges_module.Edge)['delete_by_uuids'].__func__
+          async def delete_by_uuids(cls, driver, uuids):
+              if not by_uuid_index(driver):
+                  return await own(cls, driver, uuids)
+              for relationship in ('MENTIONS', 'RELATES_TO', 'HAS_MEMBER'):
+                  await driver.execute_query(
+                      'MATCH ()-[e:' + relationship + ']->() WHERE e.uuid IN $uuids DELETE e',
+                      uuids=uuids,
+                  )
+          delete_by_uuids._gralkor_original = original
+          return classmethod(delete_by_uuids)
+
       def columns(kind):
           replaced, replacement = column_replacements[kind]
           def wrap_columns(original):
@@ -458,17 +717,24 @@ defmodule Gralkor.GraphitiPool do
           'edge': edge_constructor,
           'episode': episode_search,
           'similarity': similarity_search,
+          'entity_similarity': entity_similarity_search,
+          'fact_fetch': fact_fetch,
+          'fact_embedding': fact_embedding,
+          'relationship_delete': relationship_delete,
           'edge_columns': columns('edge_columns'),
           'node_columns': columns('node_columns'),
           'query': timed_query,
       }
+      restorable = [
+          (owner, name, vars(owner)[name] if inspect.isclass(owner) else function)
+          for owner, name, function, _kind in originals
+      ]
       wrapped = [(owner, name, wrap[kind](function)) for owner, name, function, kind in originals]
       for owner, name, function in wrapped:
           setattr(owner, name, function)
-      search_utils._gralkor_search_filter_originals = [
-          (owner, name, function) for owner, name, function, _kind in originals
-      ]
+      search_utils._gralkor_search_filter_originals = restorable
       search_utils._gralkor_read_timeout = read_timeout
+      search_utils._gralkor_nearest_count = nearest_count
       search_utils._gralkor_search_filters = WriterSearchFilters
       return WriterSearchFilters
   """
@@ -1931,16 +2197,25 @@ defmodule Gralkor.GraphitiPool do
   @doc false
   @spec initialise_instance(any()) :: :ok
   def initialise_instance(instance) do
-    %{"replaced" => replaced, "tagged" => tagged, "graph" => graph} =
+    %{
+      "replaced" => replaced,
+      "tagged" => tagged,
+      "graph" => graph,
+      "vector_indexes" => %{"created" => created, "dimension" => dimension}
+    } =
       """
       #{@writer_recording}
+      #{@vector_indexes}
       async def initialise():
           await g.build_indices_and_constraints()
           driver = getattr(g, 'driver', None)
+          tagged = await backfill_writers(driver)
+          vector_indexes = await create_vector_indexes(g)
           return {
               'replaced': list(getattr(driver, '_gralkor_replaced_stopword_indexes', None) or []),
-              'tagged': await backfill_writers(driver),
+              'tagged': tagged,
               'graph': str(getattr(driver, '_database', None)),
+              'vector_indexes': vector_indexes,
           }
       initialise()
       """
@@ -1960,6 +2235,14 @@ defmodule Gralkor.GraphitiPool do
       Logger.info(
         "[gralkor] recorded writers for memory written before writers were recorded — " <>
           "graph: #{graph} episodes: #{episodes} facts: #{facts} entities: #{entities}"
+      )
+    end
+
+    if created != [] do
+      Logger.info(
+        "[gralkor] vector indexes created — graph: #{graph} indexes: #{Enum.join(created, ", ")} " <>
+          "dimension: #{dimension}; FalkorDB builds them in the background and fact and entity " <>
+          "similarity searches compare every fact or entity until each is built"
       )
     end
 

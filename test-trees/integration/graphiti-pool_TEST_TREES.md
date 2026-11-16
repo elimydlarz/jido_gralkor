@@ -6,7 +6,8 @@ when the graph library needs inference
 when the pool starts
   then the shared asyncio runtime is installed, so the pool can be started on its own
   and the LLM client, the embedder, and the cross-encoder are each constructed once and shared by every graph instance for the pool's lifetime
-  and the graph library's node and edge filter constructors, fact similarity search, episode full-text search, and fact and entity result columns are wrapped once, before any search
+  and the graph library's node and edge filter constructors, its fact similarity search, its entity similarity search both where searching calls it and where adding an episode calls it to find an extracted entity's possible duplicates, its episode full-text search, and its fact and entity result columns are wrapped once, before any search
+  and the graph library's reading of facts by identifier, its loading of a fact's embedding, and its deletion of relationships by identifier are wrapped once, before any graph operation
   and the graph client's query is wrapped once, before any search, so a search can give its queries a query timeout
   and the graph library's FalkorDB index building is wrapped once, before any graph instance is built
   while every configured model spec names a supported inference provider
@@ -171,6 +172,10 @@ if removing an episode raises inside the graph library
   then an error carrying only the raised exception's class and message is returned
   and the logged diagnostic is a single concise line rather than a full traceback
 
+when the graph library reads facts by identifier, loads a fact's embedding, or deletes relationships by identifier on FalkorDB
+  then it finds them through the identifier index, without reading every entity
+  and it reads, loads, or deletes exactly what the graph library's own query does
+
 when a fact search is run for a group
   then the graph library's edge search is invoked with the requested result count
   and each returned edge is rendered as a fact carrying its text and its created, valid, invalid, and expired timestamps
@@ -236,9 +241,10 @@ when a memory search is run for a group
     and the single search's filter admits only episodes created at or after that time
     and every admission is applied inside its query, before its limit
     and any included or excluded writers are applied in the same queries
-    and the fact similarity query returns the facts, in the same order, that the graph library's own query returns under the same restrictions
-    and the fact similarity query finds its facts through the creation-time index before it reads any entity
     and the episode full-text query restricts the episodes the full-text index yields without looking each one up again
+    where the fact vector index leaves fewer facts than the search keeps
+      then the fact similarity query returns the facts, in the same order, that the graph library's own query returns under the same restrictions
+      and the fact similarity query finds its facts through the creation-time index before it reads any entity
   when the query exceeds the graph library's full-text limit
     then the graph library receives a bounded non-empty query containing the earliest supported terms
   when a returned Reflection episode lacks its durable extraction-completion marker
@@ -247,18 +253,77 @@ when a memory search is run for a group
 if running a memory search raises inside the graph library
   then an error carrying the raised exception is returned
 
+when a fact or entity similarity search runs on FalkorDB
+  while the graph's vector index for those embeddings is built
+    then the vector index is asked for many more of the nearest facts or entities than the search keeps
+    and the group, the graph library's own filters, the included and excluded writers, and the earliest creation time are applied to what the vector index gives, inside the same query, before the search's limit
+    and each result is scored as the graph library scores it, and only results scoring above the search's minimum are kept, best first
+    where at least as many results pass as the search keeps
+      then no stored embedding is compared with the search's outside the vector index
+      and the search returns as many results as the graph library's own query returns under the same restrictions
+      and every result scores at least as high as the lowest-scoring result of the graph library's own query
+    where fewer results pass than the search keeps
+      while the vector index gave every candidate it was asked for, the farthest of them scores at or below the search's minimum, and at least one result passed
+        then the results that passed are returned
+        and the graph library's own query is not sent
+      while the farthest candidate scores above the search's minimum, the vector index gave fewer candidates than it was asked for, or no result passed
+        then the search answers with the graph library's own query under the same restrictions, through the creation-time index when an earliest creation time is supplied to a fact search
+        and returns as many results as that query does
+    while writers are included and few of the graph's facts are theirs
+      then the fact search returns as many results as the graph library's own query returns under the same restrictions
+    while writers are included and few of the graph's entities are theirs
+      then the entity search returns as many results as the graph library's own query returns under the same restrictions
+    when the vector index is dropped
+      then the next search answers with the graph library's own query
+      and the vector index is not asked
+  while the graph's vector index for those embeddings is still being built
+    then the search answers with the graph library's own query
+    and the vector index is not asked
+  while the graph has no vector index for those embeddings
+    then the search answers with the graph library's own query
+    and the vector index is not asked
+  where a fact search names the facts it may return, or the entities at either end of the facts it may return
+    then the search answers with the graph library's own query
+    and neither the vector index nor whether it is built is read
+
+when adding an episode looks for entities that may duplicate an extracted entity
+  while the entity vector index is built
+    then the candidates come from the entity vector index, as every other entity similarity search's do
+
+when adding an episode looks for facts a new fact may invalidate
+  while the fact vector index is built
+    then the candidates come from the fact vector index
+
+when adding an episode looks for facts that duplicate a new fact between the same two entities
+  then the candidates are compared as the graph library's own query compares them, without the vector index
+
 when a graph instance's indexes are built on FalkorDB
   then its full-text indexes carry no stopword list
   and an exact-match lookup for an indexed value that is a stopword returns its match instead of crashing FalkorDB
+  and the graph has a vector index over fact embeddings and one over entity name embeddings, each comparing by cosine at the dimension the embedder produces
+  and the vector indexes are created after any stopword replacement and after writers are recorded
+  and index building returns without waiting for FalkorDB to finish building them
+  while the graph has no vector index over fact or entity embeddings
+    then the missing vector indexes are created
+    and their creation is logged naming the graph, each index created, and its dimension
+  while both vector indexes already exist, built or still being built
+    then neither is created again
+    and nothing is logged about them
+  if an existing vector index compares at another dimension than the embedder produces, or by another similarity than cosine
+    then it is left unchanged
+    and a vector index the graph lacks is still created
+    and index building fails, naming the graph, the index, its dimension and similarity, the embedder's dimension, and how to replace it
   while a label's index already carries a stopword list
     then every index on that label is dropped and recreated with the same fields and no stopword list
     and the replacement is logged naming the label
     and an exact-match lookup for a stopword value on that label returns its match
+    and both vector indexes are created after the replacement
   while every index already carries no stopword list
     then no index is replaced
   if a label carrying a stopword list also holds an index that is neither range nor full-text
     then that label's indexes are left unchanged
     and the failure is logged naming the label
+    and no vector index is created
   while the graph holds episodes, facts, or entities without recorded writers
     then each such episode records the writer its provenance names, or `unknown`
     and each such fact and entity records the writers of its episodes

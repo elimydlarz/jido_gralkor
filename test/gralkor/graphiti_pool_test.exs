@@ -41,7 +41,9 @@ defmodule Gralkor.GraphitiPoolTest do
   @search_filter_targets """
   import graphiti_core.search.search as search_module
   import graphiti_core.search.search_utils as search_utils
+  import graphiti_core.utils.maintenance.node_operations as node_operations
   import graphiti_core.driver.falkordb.operations.search_ops as falkor_search_ops
+  import graphiti_core.edges as edges_module
   targets = [
       (search_utils, 'node_search_filter_query_constructor'),
       (search_utils, 'edge_search_filter_query_constructor'),
@@ -49,9 +51,21 @@ defmodule Gralkor.GraphitiPoolTest do
       (falkor_search_ops, 'edge_search_filter_query_constructor'),
       (search_module, 'episode_fulltext_search'),
       (search_module, 'edge_similarity_search'),
+      (search_module, 'node_similarity_search'),
+      (node_operations, 'node_similarity_search'),
       (search_utils, 'get_entity_edge_return_query'),
       (search_utils, 'get_entity_node_return_query'),
+      (edges_module.EntityEdge, 'get_by_uuids'),
+      (edges_module.EntityEdge, 'load_fact_embedding'),
+      (edges_module.Edge, 'delete_by_uuids'),
   ]
+
+  def qualified(owner, name):
+      prefix = owner.__name__ if isinstance(owner, type(search_utils)) else owner.__module__ + '.' + owner.__qualname__
+      return prefix + '.' + name
+
+  def current(owner, name):
+      return vars(owner).get(name) if isinstance(owner, type) else getattr(owner, name, None)
   """
 
   defp wrapped_search_functions do
@@ -61,8 +75,8 @@ defmodule Gralkor.GraphitiPoolTest do
           """
           [
               [
-                  module.__name__ + '.' + name,
-                  id(getattr(module, name, None)),
+                  qualified(module, name),
+                  id(current(module, name)),
                   hasattr(getattr(module, name, None), '_gralkor_original'),
               ]
               for module, name in targets
@@ -72,6 +86,12 @@ defmodule Gralkor.GraphitiPoolTest do
       )
 
     Pythonx.decode(functions)
+  end
+
+  defp identifier_wraps do
+    Enum.filter(wrapped_search_functions(), fn [name, _id, _wrapped?] ->
+      String.starts_with?(name, "graphiti_core.edges.")
+    end)
   end
 
   defp graph_client_query do
@@ -101,7 +121,7 @@ defmodule Gralkor.GraphitiPoolTest do
           """
           from falkordb.asyncio.graph import AsyncGraph
           saved = (
-              [(module, name, getattr(module, name, None)) for module, name in targets + [(AsyncGraph, 'query')]],
+              [(module, name, current(module, name)) for module, name in targets + [(AsyncGraph, 'query')]],
               getattr(search_utils, '_gralkor_search_filters', None),
               getattr(search_utils, '_gralkor_search_filter_originals', None),
               getattr(search_utils, '_gralkor_read_timeout', None),
@@ -2208,6 +2228,110 @@ defmodule Gralkor.GraphitiPoolTest do
              ) ==
                [%{"uuid" => "the"}]
     end
+
+    test "and the graph has a vector index over fact embeddings and one over entity name embeddings, each comparing by cosine at the dimension the embedder produces",
+         %{pid: pid} do
+      instance = GraphitiPool.for(pid, "fresh")
+      dimension = embedder_dimension(instance)
+
+      assert vector_index_options(instance) == %{
+               "RELATES_TO.fact_embedding" => {"cosine", dimension},
+               "Entity.name_embedding" => {"cosine", dimension}
+             }
+    end
+
+    test "and the vector indexes are created after any stopword replacement and after writers are recorded",
+         %{pid: pid} do
+      sent = rebuilt_queries(pid, "fresh")
+      creates = Enum.filter(sent, &(&1 =~ "CREATE VECTOR INDEX"))
+
+      assert [fact, entity] = creates
+      assert fact =~ "RELATES_TO"
+      assert entity =~ "Entity"
+
+      first_create = Enum.find_index(sent, &(&1 =~ "CREATE VECTOR INDEX"))
+
+      assert Enum.find_index(sent, &(&1 =~ "CREATE FULLTEXT INDEX")) < first_create
+      assert Enum.find_index(sent, &(&1 =~ "CREATE INDEX")) < first_create
+
+      last_backfill =
+        sent
+        |> Enum.with_index()
+        |> Enum.filter(fn {cypher, _} -> cypher =~ "_gralkor_writers" end)
+        |> List.last()
+        |> elem(1)
+
+      assert last_backfill < first_create
+    end
+
+    test "and index building returns without waiting for FalkorDB to finish building them", %{
+      pid: pid
+    } do
+      sent = rebuilt_queries(pid, "fresh")
+
+      assert List.last(sent) =~ "CREATE VECTOR INDEX FOR (n:Entity)"
+    end
+  end
+
+  describe "when a graph instance's indexes are built on FalkorDB > while the graph has no vector index over fact or entity embeddings" do
+    setup :start_real_embedded_pool
+
+    test "then the missing vector indexes are created", %{pid: pid} do
+      instance = GraphitiPool.for(pid, "fresh")
+
+      assert Map.keys(vector_index_options(instance)) |> Enum.sort() ==
+               ["Entity.name_embedding", "RELATES_TO.fact_embedding"]
+    end
+
+    test "and their creation is logged naming the graph, each index created, and its dimension",
+         %{
+           pid: pid
+         } do
+      log = capture_log(fn -> GraphitiPool.for(pid, "fresh") end)
+
+      assert log =~
+               "[gralkor] vector indexes created — graph: #{physical("fresh")} " <>
+                 "indexes: RELATES_TO.fact_embedding, Entity.name_embedding dimension: 3"
+    end
+  end
+
+  describe "when a graph instance's indexes are built on FalkorDB > while both vector indexes already exist, built or still being built" do
+    setup :start_real_embedded_pool
+
+    test "then neither is created again", %{pid: pid} do
+      GraphitiPool.for(pid, "fresh")
+      sent = recorded_build(pid, "fresh")
+
+      refute Enum.any?(sent, &(&1 =~ "CREATE VECTOR INDEX"))
+    end
+
+    test "and nothing is logged about them", %{pid: pid} do
+      GraphitiPool.for(pid, "fresh")
+      log = capture_log(fn -> assert {:ok, _} = GraphitiPool.build_indices(pid) end)
+
+      refute log =~ "vector indexes created"
+    end
+  end
+
+  describe "when a graph instance's indexes are built on FalkorDB > if an existing vector index compares at another dimension than the embedder produces, or by another similarity than cosine" do
+    setup :start_real_embedded_pool
+
+    test "then it is left unchanged", %{pid: pid} do
+      instance = mismatched_build(pid)
+
+      assert vector_index_options(instance)["RELATES_TO.fact_embedding"] == {"cosine", 4}
+    end
+
+    test "and a vector index the graph lacks is still created", %{pid: pid} do
+      instance = mismatched_build(pid)
+
+      assert vector_index_options(instance)["Entity.name_embedding"] == {"cosine", 3}
+    end
+
+    test "and index building fails, naming the graph, the index, its dimension and similarity, the embedder's dimension, and how to replace it",
+         context do
+      assert_index_building_fails_naming_graph_index_dimension_similarity(context)
+    end
   end
 
   describe "when a graph instance's indexes are built on FalkorDB > while a label's index already carries a stopword list" do
@@ -2244,6 +2368,15 @@ defmodule Gralkor.GraphitiPoolTest do
              ) ==
                [%{"uuid" => "the"}]
     end
+
+    test "and both vector indexes are created after the replacement", %{pid: pid} do
+      instance = capture_log_result(fn -> GraphitiPool.for(pid, "stopwords") end)
+
+      assert Enum.find(graph_indexes(instance), &(&1["label"] == "Episodic"))["stopwords"] == []
+
+      assert Map.keys(vector_index_options(instance)) |> Enum.sort() ==
+               ["Entity.name_embedding", "RELATES_TO.fact_embedding"]
+    end
   end
 
   describe "when a graph instance's indexes are built on FalkorDB > while every index already carries no stopword list" do
@@ -2276,6 +2409,17 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert log =~ "build_indices_and_constraints failed (non-fatal)"
       assert log =~ "Episodic"
+    end
+
+    test "and no vector index is created", %{pid: pid} do
+      capture_log(fn -> GraphitiPool.for(pid, "stopwords") end)
+
+      indexes = physical_graph_indexes(pid, "stopwords")
+
+      for label <- ["Entity", "RELATES_TO"] do
+        index = Enum.find(indexes, %{"types" => %{}}, &(&1["label"] == label))
+        refute Enum.any?(Map.values(index["types"]), &("VECTOR" in &1))
+      end
     end
   end
 
@@ -2617,6 +2761,7 @@ defmodule Gralkor.GraphitiPoolTest do
       searched = column_search(seed_embedded_graph(pid))
 
       assert length(searched["raw"]) == 7
+      assert searched["lookups"] == 3
 
       for attributes <- searched["raw"] do
         assert attributes["fact_embedding"] == nil
@@ -2781,23 +2926,27 @@ defmodule Gralkor.GraphitiPoolTest do
     driver = g.driver
     since = search_utils._gralkor_search_filters(since='2026-01-01T00:00:00Z')
 
+    lookups = []
+
     async def searched():
         raw = []
         original = driver.execute_query
         async def recording(cypher, **params):
             result = await original(cypher, **params)
+            if 'db.idx.vector' in cypher:
+                lookups.append(cypher)
             raw.extend(copy.deepcopy(record['attributes']) for record in result[0] if 'attributes' in record)
             return result
         driver.execute_query = recording
         try:
             edges = (
                 await search_utils.edge_fulltext_search(driver, 'amber', SearchFilters(), None, 10)
-                + await search_module.edge_similarity_search(driver, [1.0, 0.0, 0.0], None, None, SearchFilters(), None, 10, 0.5)
-                + await search_module.edge_similarity_search(driver, [1.0, 0.0, 0.0], None, None, since, None, 10, 0.5)
+                + await search_module.edge_similarity_search(driver, [1.0, 0.0, 0.0], None, None, SearchFilters(), None, 1, 0.5)
+                + await search_module.edge_similarity_search(driver, [1.0, 0.0, 0.0], None, None, since, None, 1, 0.5)
             )
             nodes = (
                 await search_utils.node_fulltext_search(driver, 'amber', SearchFilters(), None, 10)
-                + await search_utils.node_similarity_search(driver, [1.0, 0.0, 0.0], SearchFilters(), None, 10, 0.5)
+                + await search_module.node_similarity_search(driver, [1.0, 0.0, 0.0], SearchFilters(), None, 2, 0.5)
             )
         finally:
             del driver.execute_query
@@ -2823,6 +2972,7 @@ defmodule Gralkor.GraphitiPoolTest do
         own_raw, own_edges, own_nodes = await own()
         return {
             'raw': raw,
+            'lookups': len(lookups),
             'own_raw': own_raw,
             'edges': [edge.attributes for edge in edges],
             'nodes': [node.attributes for node in nodes],
@@ -3247,32 +3397,6 @@ defmodule Gralkor.GraphitiPoolTest do
              }
     end
 
-    test "and the fact similarity query returns the facts, in the same order, that the graph library's own query returns under the same restrictions",
-         %{instance: instance} do
-      compared = since_search(instance)["similarity"]
-
-      assert Enum.map(compared, & &1["wrapped"]) == [
-               ["new-edge", "at-edge"],
-               ["new-edge", "at-edge", "old-edge"],
-               ["new-edge", "at-edge"],
-               ["at-edge"],
-               ["new-edge", "at-edge"],
-               ["new-edge", "at-edge"],
-               []
-             ]
-
-      for %{"wrapped" => wrapped, "own" => own} <- compared, do: assert(wrapped == own)
-    end
-
-    test "and the fact similarity query finds its facts through the creation-time index before it reads any entity",
-         %{instance: instance} do
-      %{"similarity_plan" => plan} = since_search(instance)
-
-      assert [scan] = Enum.filter(plan, &(&1 =~ "Scan"))
-      assert scan =~ "Edge By Index Scan | [e:RELATES_TO]"
-      assert List.last(plan) == scan
-    end
-
     test "and the episode full-text query restricts the episodes the full-text index yields without looking each one up again",
          %{instance: instance} do
       %{"episode_plan" => plan, "episode_cypher" => cypher} = since_search(instance)
@@ -3280,6 +3404,20 @@ defmodule Gralkor.GraphitiPoolTest do
       refute cypher =~ "MATCH"
       refute Enum.any?(plan, &(&1 =~ "Scan"))
       assert String.trim(List.last(plan)) == "ProcedureCall"
+    end
+  end
+
+  describe "when a memory search is run for a group > while an earliest creation time is supplied > where the fact vector index leaves fewer facts than the search keeps" do
+    setup [:start_real_embedded_pool, :seed_aged_graph]
+
+    test "then the fact similarity query returns the facts, in the same order, that the graph library's own query returns under the same restrictions",
+         context do
+      assert_fact_similarity_query_returns_facts_in_same_order_that_graph(context)
+    end
+
+    test "and the fact similarity query finds its facts through the creation-time index before it reads any entity",
+         context do
+      assert_fact_similarity_query_finds_facts_through_creationtime_index(context)
     end
   end
 
@@ -3329,12 +3467,14 @@ defmodule Gralkor.GraphitiPoolTest do
         finally:
             del driver.execute_query
         graph = driver._get_graph(driver._database)
-        plans = [str(await graph.explain(cypher, params)).splitlines() for cypher, params in sent]
+        similarity_sent = next((c, p) for c, p in sent if c.startswith('MATCH ()-[e:RELATES_TO]->()'))
+        episode_sent = next((c, p) for c, p in sent if 'episode_content' in c or 'Episodic' in c)
+        plan = lambda pair: graph.explain(pair[0], pair[1])
         return {
             'similarity': similarity,
-            'similarity_plan': plans[0],
-            'episode_plan': plans[1],
-            'episode_cypher': sent[1][0],
+            'similarity_plan': str(await plan(similarity_sent)).splitlines(),
+            'episode_plan': str(await plan(episode_sent)).splitlines(),
+            'episode_cypher': episode_sent[0],
         }
 
     run()
@@ -3417,6 +3557,740 @@ defmodule Gralkor.GraphitiPoolTest do
 
       GenServer.stop(pid)
     end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the vector index is asked for many more of the nearest facts or entities than the search keeps",
+         %{instance: instance} do
+      found =
+        similarity_run(instance, """
+        async def run():
+            facts, fact_sent = await recorded(lambda: search('fact', SearchFilters(), 4, 0.6))
+            entities, entity_sent = await recorded(lambda: search('entity', SearchFilters(), 4, 0.6))
+            return {'k': search_utils._gralkor_nearest_count(4), 'sent': fact_sent + entity_sent}
+        run()
+        """)
+
+      lookups = Enum.filter(found["sent"], &(&1["cypher"] =~ "db.idx.vector"))
+      assert Enum.map(lookups, &(&1["cypher"] =~ "queryRelationships")) == [true, false]
+      assert Enum.at(lookups, 1)["cypher"] =~ "queryNodes"
+
+      for lookup <- lookups do
+        assert lookup["gralkor_k"] == found["k"]
+        assert lookup["gralkor_k"] > lookup["limit"]
+      end
+    end
+
+    test "and the group, the graph library's own filters, the included and excluded writers, and the earliest creation time are applied to what the vector index gives, inside the same query, before the search's limit",
+         context do
+      assert_group_graph_librarys_own_filters_included_excluded_writers_e(context)
+    end
+
+    test "and each result is scored as the graph library scores it, and only results scoring above the search's minimum are kept, best first",
+         context do
+      assert_each_result_scored_as_graph_library_scores_it_only_results_s(context)
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > where at least as many results pass as the search keeps" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then no stored embedding is compared with the search's outside the vector index",
+         context do
+      assert_no_stored_embedding_compared_with_searchs_outside_vector_ind(context)
+    end
+
+    test "and the search returns as many results as the graph library's own query returns under the same restrictions",
+         context do
+      assert_search_returns_as_many_results_as_graph_librarys_own_query_r(context)
+    end
+
+    test "and every result scores at least as high as the lowest-scoring result of the graph library's own query",
+         context do
+      assert_every_result_scores_at_least_as_high_as_lowestscoring_result(context)
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > where fewer results pass than the search keeps > while the vector index gave every candidate it was asked for, the farthest of them scores at or below the search's minimum, and at least one result passed" do
+    setup [:start_real_embedded_pool, :seed_crowded_vector_graph]
+
+    test "then the results that passed are returned", context do
+      assert_results_that_passed_are_returned(context)
+    end
+
+    test "and the graph library's own query is not sent", context do
+      assert_graph_librarys_own_query_not_sent(context)
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > where fewer results pass than the search keeps > while the farthest candidate scores above the search's minimum, the vector index gave fewer candidates than it was asked for, or no result passed" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the search answers with the graph library's own query under the same restrictions, through the creation-time index when an earliest creation time is supplied to a fact search",
+         context do
+      assert_search_answers_with_graph_librarys_own_query_under_same_rest(context)
+    end
+
+    test "and returns as many results as that query does", context do
+      assert_returns_as_many_results_as_that_query_does(context)
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > while writers are included and few of the graph's facts are theirs" do
+    setup [:start_real_embedded_pool, :seed_distant_writer_graph]
+
+    test "then the fact search returns as many results as the graph library's own query returns under the same restrictions",
+         context do
+      assert_fact_search_returns_as_many_results_as_graph_librarys_own_qu(context)
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > while writers are included and few of the graph's entities are theirs" do
+    setup [:start_real_embedded_pool, :seed_distant_writer_graph]
+
+    test "then the entity search returns as many results as the graph library's own query returns under the same restrictions",
+         context do
+      assert_entity_search_returns_as_many_results_as_graph_librarys_own(context)
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > when the vector index is dropped" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the next search answers with the graph library's own query", %{instance: instance} do
+      found = dropped_search(instance)
+
+      assert Enum.any?(found["before"], &(&1 =~ "db.idx.vector"))
+      assert [status, own] = found["after"]
+      assert status =~ "CALL db.indexes()"
+      assert own =~ "vec.cosineDistance"
+      assert found["facts"] == found["own"]
+    end
+
+    test "and the vector index is not asked", %{instance: instance} do
+      found = dropped_search(instance)
+
+      refute Enum.any?(found["after"], &(&1 =~ "db.idx.vector"))
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is still being built" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the search answers with the graph library's own query", %{instance: instance} do
+      found = building_search(instance)
+
+      for kind <- ["fact", "entity"] do
+        assert [status, own] = found[kind]["sent"]
+        assert status =~ "CALL db.indexes()"
+        assert own =~ "vec.cosineDistance"
+        assert found[kind]["wrapped"] == found[kind]["own"]
+      end
+    end
+
+    test "and the vector index is not asked", %{instance: instance} do
+      found = building_search(instance)
+
+      for kind <- ["fact", "entity"] do
+        refute Enum.any?(found[kind]["sent"], &(&1 =~ "db.idx.vector"))
+      end
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph has no vector index for those embeddings" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the search answers with the graph library's own query", %{instance: instance} do
+      found = unindexed_search(instance)
+
+      for kind <- ["fact", "entity"] do
+        assert [status, own] = found[kind]["sent"]
+        assert status =~ "CALL db.indexes()"
+        assert own =~ "vec.cosineDistance"
+        assert found[kind]["wrapped"] == found[kind]["own"]
+        assert length(found[kind]["wrapped"]) == 4
+      end
+    end
+
+    test "and the vector index is not asked", %{instance: instance} do
+      found = unindexed_search(instance)
+
+      for kind <- ["fact", "entity"] do
+        refute Enum.any?(found[kind]["sent"], &(&1 =~ "db.idx.vector"))
+      end
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > where a fact search names the facts it may return, or the entities at either end of the facts it may return" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the search answers with the graph library's own query", %{instance: instance} do
+      for found <- naming_searches(instance) do
+        assert [own] = found["sent"]
+        assert own =~ "vec.cosineDistance"
+        assert found["wrapped"] == found["own"]
+      end
+    end
+
+    test "and neither the vector index nor whether it is built is read", %{instance: instance} do
+      for found <- naming_searches(instance) do
+        refute Enum.any?(found["sent"], &(&1 =~ "db.idx.vector" or &1 =~ "db.indexes"))
+      end
+    end
+  end
+
+  describe "when adding an episode looks for entities that may duplicate an extracted entity > while the entity vector index is built" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the candidates come from the entity vector index, as every other entity similarity search's do",
+         %{instance: instance} do
+      found =
+        similarity_run(instance, """
+        import graphiti_core.utils.maintenance.node_operations as node_operations
+        async def run():
+            nodes, sent = await recorded(lambda: node_operations.node_similarity_search(
+                g.driver, QUERY, SearchFilters(), ['g'], 15, 0.6))
+            return {'nodes': [node.uuid for node in nodes], 'sent': [entry['cypher'] for entry in sent]}
+        run()
+        """)
+
+      assert length(found["nodes"]) == 15
+      assert [lookup] = Enum.filter(found["sent"], &(&1 =~ "db.idx.vector"))
+      assert lookup =~ "queryNodes"
+      assert lookup =~ "n.group_id IN $group_ids"
+      refute Enum.any?(found["sent"], &(&1 =~ "vec.cosineDistance"))
+    end
+  end
+
+  describe "when adding an episode looks for facts a new fact may invalidate > while the fact vector index is built" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the candidates come from the fact vector index", %{instance: instance} do
+      found = ingestion_fact_search(instance, "SearchFilters()")
+
+      assert [lookup] = Enum.filter(found, &(&1 =~ "db.idx.vector"))
+      assert lookup =~ "queryRelationships"
+      assert lookup =~ "e.group_id IN $group_ids"
+      refute Enum.any?(found, &(&1 =~ "vec.cosineDistance"))
+    end
+  end
+
+  describe "when the graph library reads facts by identifier, loads a fact's embedding, or deletes relationships by identifier on FalkorDB" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph, :seed_mentions]
+
+    test "then it finds them through the identifier index, without reading every entity", %{
+      instance: instance
+    } do
+      found = identifier_operations(instance)
+
+      assert length(found["plans"]) == 5
+
+      for plan <- found["plans"] do
+        refute plan =~ "Label Scan"
+        refute plan =~ "All Node Scan"
+        assert plan =~ "Edge By Index Scan"
+      end
+    end
+
+    test "and it reads, loads, or deletes exactly what the graph library's own query does", %{
+      instance: instance
+    } do
+      found = identifier_operations(instance)
+
+      assert found["read"] == found["own_read"]
+      assert length(found["read"]) == 3
+      assert found["loaded"] == found["own_loaded"]
+      assert found["missing"] == "EdgeNotFoundError"
+      assert found["own_missing"] == "EdgeNotFoundError"
+      assert found["left_by_own"] == found["left"] -- found["deleted_by_own"]
+      assert found["left"] == found["before"] -- found["deleted"]
+    end
+  end
+
+  describe "when adding an episode looks for facts that duplicate a new fact between the same two entities" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the candidates are compared as the graph library's own query compares them, without the vector index",
+         %{instance: instance} do
+      found =
+        ingestion_fact_search(
+          instance,
+          "SearchFilters(edge_source_node_uuids=['s0', 't0'], edge_target_node_uuids=['s0', 't0'])"
+        )
+
+      assert Enum.any?(found, &(&1 =~ "vec.cosineDistance"))
+      refute Enum.any?(found, &(&1 =~ "db.idx.vector" or &1 =~ "db.indexes"))
+    end
+  end
+
+  @similarity_python """
+  import math
+  import random
+  from datetime import datetime, timedelta, timezone
+  import graphiti_core.search.search as search_module
+  import graphiti_core.search.search_utils as search_utils
+  from graphiti_core.search.search_filters import SearchFilters, DateFilter, ComparisonOperator
+
+  Filters = search_utils._gralkor_search_filters
+  QUERY = [1.0, 0.0, 0.0]
+
+  async def recorded(call):
+      sent = []
+      previous = g.driver.__dict__.get('execute_query')
+      original = g.driver.execute_query
+      async def recording(cypher, **params):
+          params.pop('routing_', None)
+          sent.append({'cypher': cypher, **{key: value for key, value in params.items() if key != 'search_vector'}})
+          return await original(cypher, **params)
+      g.driver.execute_query = recording
+      try:
+          result = await call()
+      finally:
+          if previous is None:
+              del g.driver.execute_query
+          else:
+              g.driver.execute_query = previous
+      return result, sent
+
+  async def search(kind, restriction, limit, min_score, group_ids=None, wrapped=True, vector=QUERY):
+      if kind == 'fact':
+          function = search_module.edge_similarity_search
+          function = function if wrapped else function._gralkor_original
+          found = await function(g.driver, vector, None, None, restriction, group_ids, limit, min_score)
+      else:
+          function = search_module.node_similarity_search
+          function = function if wrapped else function._gralkor_original
+          found = await function(g.driver, vector, restriction, group_ids, limit, min_score)
+      return [record.uuid for record in found]
+
+  async def scores(kind, uuids, vector=QUERY):
+      match = 'MATCH ()-[e:RELATES_TO]->() WHERE e.uuid IN $uuids RETURN e.uuid AS uuid, (2 - vec.cosineDistance(e.fact_embedding, vecf32($vector)))/2 AS score'
+      if kind == 'entity':
+          match = 'MATCH (e:Entity) WHERE e.uuid IN $uuids RETURN e.uuid AS uuid, (2 - vec.cosineDistance(e.name_embedding, vecf32($vector)))/2 AS score'
+      records, _, _ = await g.driver.execute_query(match, uuids=uuids, vector=vector)
+      by_uuid = {record['uuid']: record['score'] for record in records}
+      return [by_uuid[uuid] for uuid in uuids]
+
+  async def all_scores(kind, vector=QUERY):
+      match = 'MATCH ()-[e:RELATES_TO]->() RETURN (2 - vec.cosineDistance(e.fact_embedding, vecf32($vector)))/2 AS score'
+      if kind == 'entity':
+          match = 'MATCH (e:Entity) RETURN (2 - vec.cosineDistance(e.name_embedding, vecf32($vector)))/2 AS score'
+      records, _, _ = await g.driver.execute_query(match, vector=vector)
+      return [record['score'] for record in records]
+
+  async def fact_rows(uuids):
+      records, _, _ = await g.driver.execute_query(
+          'MATCH ()-[e:RELATES_TO]->() WHERE e.uuid IN $uuids '
+          'RETURN e.uuid AS uuid, e.group_id AS group_id, e.name AS name, e._gralkor_writers AS writers, e.created_at AS created_at',
+          uuids=uuids,
+      )
+      return records
+
+  async def compare(kind, restriction, limit, min_score, group_ids=None):
+      wrapped, sent = await recorded(lambda: search(kind, restriction, limit, min_score, group_ids))
+      own = await search(kind, restriction, limit, min_score, group_ids, wrapped=False)
+      return {
+          'wrapped': wrapped,
+          'own': own,
+          'wrapped_scores': await scores(kind, wrapped),
+          'own_scores': await scores(kind, own),
+          'sent': [entry['cypher'] for entry in sent],
+      }
+  """
+
+  @vector_seeding """
+  import math
+  import random
+  from datetime import datetime, timedelta, timezone
+
+  def at_cosine(cosine, rng):
+      angle = rng.uniform(0, 2 * math.pi)
+      side = math.sqrt(max(0.0, 1 - cosine * cosine))
+      return [cosine, side * math.cos(angle), side * math.sin(angle)]
+
+  def moment(day):
+      return (datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=day)).isoformat()
+
+  async def write(entities, facts):
+      for start in range(0, len(entities), 500):
+          await g.driver.execute_query(
+              'UNWIND $rows AS r CREATE (n:Entity {uuid: r.uuid, name: r.uuid, group_id: r.group_id, summary: r.uuid, '
+              'created_at: r.created_at, _gralkor_writers: r.writers, kind: r.kind}) '
+              'SET n.name_embedding = vecf32(r.vector)',
+              rows=entities[start:start + 500],
+          )
+      for kind in ('Person', 'Team'):
+          await g.driver.execute_query('MATCH (n:Entity {kind: $kind}) SET n:' + kind, kind=kind)
+      for start in range(0, len(facts), 500):
+          await g.driver.execute_query(
+              'UNWIND $rows AS r MATCH (a:Entity {uuid: r.source}), (b:Entity {uuid: r.target}) '
+              'CREATE (a)-[e:RELATES_TO {uuid: r.uuid, name: r.name, fact: r.uuid, group_id: r.group_id, episodes: [], '
+              'created_at: r.created_at, valid_at: r.valid_at, _gralkor_writers: r.writers}]->(b) '
+              'SET e.fact_embedding = vecf32(r.vector), e.invalid_at = r.invalid_at, e.expired_at = r.expired_at',
+              rows=facts[start:start + 500],
+          )
+
+  def fact(uuid, source, target, vector, writers, day=0, name='OWNS', group_id='g', invalid_at=None, expired_at=None):
+      return {
+          'uuid': uuid, 'source': source, 'target': target, 'vector': vector, 'writers': writers, 'name': name,
+          'group_id': group_id, 'created_at': moment(day), 'valid_at': moment(day), 'invalid_at': invalid_at,
+          'expired_at': expired_at,
+      }
+
+  def entity(uuid, vector, writers, day=0, kind='Person', group_id='g'):
+      return {'uuid': uuid, 'vector': vector, 'writers': writers, 'created_at': moment(day), 'kind': kind, 'group_id': group_id}
+
+  WRITERS = [['lens:alpha'], ['lens:beta'], ['direct'], ['reflection:review'], ['lens:alpha', 'direct']]
+  """
+
+  # Runs Python that the similarity prelude makes able to search the instance's
+  # graph as the started pool wraps it and as the graph library does, and to
+  # record what every search sends.
+  defp similarity_run(instance, code) do
+    (@similarity_python <> code)
+    |> Gralkor.Python.run_coroutine(%{"g" => instance})
+    |> Pythonx.decode()
+  end
+
+  defp seed_vectors(instance, code) do
+    (@vector_seeding <> code)
+    |> Gralkor.Python.run_coroutine(%{"g" => instance})
+    |> Pythonx.decode()
+
+    assert eventually(fn -> vector_indexes_built?(instance) end)
+  end
+
+  defp vector_indexes_built?(instance) do
+    instance
+    |> graph_query(
+      "CALL db.indexes() YIELD label, types, status WHERE label IN ['RELATES_TO', 'Entity'] RETURN label, types, status"
+    )
+    |> Enum.filter(fn index -> Enum.any?(Map.values(index["types"]), &("VECTOR" in &1)) end)
+    |> then(
+      &(length(&1) == 2 and Enum.all?(&1, fn index -> index["status"] == "OPERATIONAL" end))
+    )
+  end
+
+  # Fifty facts, each between an entity `s<i>` and an entity `t<i>`, whose
+  # embeddings are ever farther from the query vector [1, 0, 0] as `i` grows,
+  # with relationship names, groups, labels, writers, and times that vary with `i`.
+  defp seed_standard_vector_graph(%{pid: pid}) do
+    instance = GraphitiPool.for(pid, "vectors")
+
+    seed_vectors(instance, """
+    async def seed():
+        rng = random.Random(8)
+        entities = []
+        facts = []
+        for i in range(50):
+            writers = WRITERS[i % 5]
+            group_id = 'h' if i % 7 == 0 else 'g'
+            entities.append(entity('s' + str(i), at_cosine(0.95 - i * 0.006, rng), writers, i, 'Person' if i % 2 == 0 else 'Team', group_id))
+            entities.append(entity('t' + str(i), at_cosine(0.947 - i * 0.006, rng), writers, i, 'Person' if i % 3 else 'Team', group_id))
+            facts.append(fact(
+                'f' + str(i), 's' + str(i), 't' + str(i), at_cosine(0.95 - i * 0.012, rng), writers, i,
+                'OWNS' if i % 2 == 0 else 'KNOWS', group_id,
+                moment(i + 10) if i % 3 == 0 else None, moment(i + 5) if i % 4 == 0 else None,
+            ))
+        await write(entities, facts)
+    seed()
+    """)
+
+    %{instance: instance}
+  end
+
+  # As many facts as the vector index is asked for when a search keeps four,
+  # and ten more, all far from the query vector but two equal to it.
+  defp seed_crowded_vector_graph(%{pid: pid}) do
+    instance = GraphitiPool.for(pid, "crowded")
+
+    seed_vectors(instance, """
+    import graphiti_core.search.search_utils as search_utils
+    async def seed():
+        rng = random.Random(9)
+        entities = [entity('pool' + str(i), at_cosine(-0.5, rng), ['unknown']) for i in range(20)]
+        facts = [
+            fact('far-' + str(i), 'pool' + str(i % 20), 'pool' + str((i + 1) % 20), at_cosine(rng.uniform(-0.9, 0.4), rng), ['lens:alpha'])
+            for i in range(search_utils._gralkor_nearest_count(4) + 8)
+        ]
+        facts += [fact('exact-' + str(i), 'pool0', 'pool1', [1.0, 0.0, 0.0], ['lens:alpha']) for i in (1, 2)]
+        await write(entities, facts)
+    seed()
+    """)
+
+    %{instance: instance}
+  end
+
+  # As many facts and entities by `lens:near` near the query vector as the
+  # vector index is asked for when a search keeps four, and four more, and four
+  # facts and entities by `lens:far`, farthest from it but still scoring above
+  # the search's minimum.
+  defp seed_distant_writer_graph(%{pid: pid}) do
+    instance = GraphitiPool.for(pid, "distant")
+
+    seed_vectors(instance, """
+    import graphiti_core.search.search_utils as search_utils
+    async def seed():
+        rng = random.Random(10)
+        near = search_utils._gralkor_nearest_count(4) + 4
+        entities = [entity('near-' + str(i), at_cosine(rng.uniform(0.9, 1.0), rng), ['lens:near']) for i in range(near)]
+        entities += [entity('far-' + str(i), at_cosine(0.3, rng), ['lens:far']) for i in range(4)]
+        facts = [fact('near-fact-' + str(i), 'near-' + str(i), 'near-' + str(i), at_cosine(rng.uniform(0.9, 1.0), rng), ['lens:near']) for i in range(near)]
+        facts += [fact('far-fact-' + str(i), 'far-' + str(i), 'far-' + str(i), at_cosine(0.3, rng), ['lens:far']) for i in range(4)]
+        await write(entities, facts)
+    seed()
+    """)
+
+    %{instance: instance}
+  end
+
+  defp seed_mentions(%{instance: instance}) do
+    graph_query(instance, """
+    CREATE (ep:Episodic {uuid: 'ep', group_id: 'g'})
+    WITH ep
+    MATCH (n:Entity) WHERE n.uuid IN ['s1', 's2', 's3']
+    CREATE (ep)-[:MENTIONS {uuid: 'mention-' + n.uuid, group_id: 'g'}]->(n)
+    """)
+
+    :ok
+  end
+
+  # Reads, loads, and deletes facts and relationships by identifier as the
+  # started pool wraps the graph library, recording each query the wrapped
+  # forms send and FalkorDB's plan for it, and does the same with the graph
+  # library's own forms.
+  defp identifier_operations(instance) do
+    similarity_run(instance, """
+    import graphiti_core.edges as edges_module
+    from graphiti_core.errors import EdgeNotFoundError
+    EntityEdge = edges_module.EntityEdge
+    Edge = edges_module.Edge
+
+    async def relationships():
+        records, _, _ = await g.driver.execute_query('MATCH ()-[e]->() RETURN e.uuid AS uuid ORDER BY uuid')
+        return [record['uuid'] for record in records]
+
+    def dumped(edges):
+        return sorted((edge.model_dump(mode='json') for edge in edges), key=lambda edge: edge['uuid'])
+
+    async def missing(load, edge):
+        try:
+            await load(edge, g.driver)
+        except EdgeNotFoundError as error:
+            return type(error).__name__
+
+    async def run():
+        driver = g.driver
+        identifiers = ['f1', 'f2', 'f3', 'absent']
+        read, read_sent = await recorded(lambda: EntityEdge.get_by_uuids(driver, identifiers))
+        own_read = await EntityEdge.get_by_uuids._gralkor_original(driver, identifiers)
+        loaded = read[0].model_copy()
+        loaded.fact_embedding = None
+        _, load_sent = await recorded(lambda: loaded.load_fact_embedding(driver))
+        own_loaded = read[0].model_copy()
+        own_loaded.fact_embedding = None
+        await EntityEdge.load_fact_embedding._gralkor_original(own_loaded, driver)
+        absent = read[0].model_copy(update={'uuid': 'absent'})
+        before = await relationships()
+        _, delete_sent = await recorded(lambda: Edge.delete_by_uuids(driver, ['f4', 'mention-s1', 'absent']))
+        left = await relationships()
+        await Edge.delete_by_uuids._gralkor_original(driver, ['f5', 'mention-s2'])
+        left_by_own = await relationships()
+        graph = driver._get_graph(driver._database)
+        plans = []
+        for entry in read_sent + load_sent + delete_sent:
+            params = {key: value for key, value in entry.items() if key != 'cypher'}
+            plans.append(str(await graph.explain(entry['cypher'], params)))
+        return {
+            'read': dumped(read),
+            'own_read': dumped(own_read),
+            'loaded': list(loaded.fact_embedding),
+            'own_loaded': list(own_loaded.fact_embedding),
+            'missing': await missing(EntityEdge.load_fact_embedding, absent.model_copy()),
+            'own_missing': await missing(EntityEdge.load_fact_embedding._gralkor_original, absent.model_copy()),
+            'before': before,
+            'left': left,
+            'left_by_own': left_by_own,
+            'deleted': ['f4', 'mention-s1'],
+            'deleted_by_own': ['f5', 'mention-s2'],
+            'plans': plans,
+        }
+    run()
+    """)
+  end
+
+  defp restriction_comparisons(instance) do
+    similarity_run(instance, """
+    def on(field, day):
+        return {field: [[DateFilter(date=datetime(2026, 1, 1, tzinfo=timezone.utc) + timedelta(days=day), comparison_operator=ComparisonOperator.greater_than)]]}
+
+    fact_restrictions = [
+        ('none', SearchFilters(), None),
+        ('one label', SearchFilters(node_labels=['Person']), None),
+        ('two labels', SearchFilters(node_labels=['Person', 'Team']), None),
+        ('edge types', SearchFilters(edge_types=['KNOWS']), None),
+        ('valid_at', SearchFilters(**on('valid_at', 20)), None),
+        ('invalid_at', SearchFilters(**on('invalid_at', 20)), None),
+        ('created_at', SearchFilters(**on('created_at', 20)), None),
+        ('expired_at', SearchFilters(**on('expired_at', 20)), None),
+        ('group', SearchFilters(), ['h']),
+        ('writers by name', Filters(writers=['reflection:review']), None),
+        ('writers by prefix', Filters(writers=['lens:*']), None),
+        ('excluded writers', Filters(excluded_writers=['lens:alpha']), None),
+        ('since', Filters(since='2026-02-01T00:00:00Z'), None),
+    ]
+    entity_restrictions = [
+        ('entity labels', SearchFilters(node_labels=['Team']), None),
+        ('entity writers', Filters(writers=['direct']), None),
+        ('entity excluded writers', Filters(excluded_writers=['lens:beta']), None),
+        ('entity since', Filters(since='2026-02-01T00:00:00Z'), None),
+        ('entity group', SearchFilters(), ['h']),
+    ]
+
+    async def run():
+        compared = []
+        for kind, restrictions in (('fact', fact_restrictions), ('entity', entity_restrictions)):
+            for name, restriction, group_ids in restrictions:
+                result = await compare(kind, restriction, 4, 0.6, group_ids)
+                result['restriction'] = name
+                compared.append(result)
+        return compared
+    run()
+    """)
+  end
+
+  defp crowded_search(instance) do
+    similarity_run(instance, """
+    async def run():
+        facts, sent = await recorded(lambda: search('fact', SearchFilters(), 4, 0.9))
+        lookup = next(entry for entry in sent if 'db.idx.vector' in entry['cypher'])
+        params = {key: value for key, value in lookup.items() if key != 'cypher'}
+        records, _, _ = await g.driver.execute_query(lookup['cypher'], search_vector=QUERY, **params)
+        return {
+            'facts': facts,
+            'sent': [entry['cypher'] for entry in sent],
+            'k': search_utils._gralkor_nearest_count(4),
+            'reached': records[0]['gralkor_reached'],
+        }
+    run()
+    """)
+  end
+
+  defp fallback_searches(instance) do
+    similarity_run(instance, """
+    async def run():
+        after_day_25 = [[DateFilter(date=datetime(2026, 1, 26, tzinfo=timezone.utc), comparison_operator=ComparisonOperator.greater_than_equal)]]
+        cases = {
+            'writers': ('fact', Filters(writers=['reflection:review'], edge_types=['KNOWS'], created_at=after_day_25), 0.6),
+            'since': ('fact', Filters(since='2026-02-17T00:00:00Z'), 0.6),
+            'none passed': ('fact', SearchFilters(), 0.99),
+            'entity writers': ('entity', Filters(writers=['reflection:review'], since='2026-02-14T00:00:00Z'), 0.6),
+        }
+        found = {}
+        for name, (kind, restriction, min_score) in cases.items():
+            found[name] = await compare(kind, restriction, 4, min_score)
+        return found
+    run()
+    """)
+  end
+
+  defp distant_writer_search(instance, kind) do
+    similarity_run(instance, """
+    compare('#{kind}', Filters(writers=['lens:far']), 4, 0.6)
+    """)
+  end
+
+  defp dropped_search(instance) do
+    similarity_run(instance, """
+    async def run():
+        _, before = await recorded(lambda: search('fact', SearchFilters(), 4, 0.6))
+        await g.driver.execute_query('DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)')
+        facts, after = await recorded(lambda: search('fact', SearchFilters(), 4, 0.6))
+        own = await search('fact', SearchFilters(), 4, 0.6, wrapped=False)
+        return {
+            'before': [entry['cypher'] for entry in before],
+            'after': [entry['cypher'] for entry in after],
+            'facts': facts,
+            'own': own,
+        }
+    run()
+    """)
+  end
+
+  defp building_search(instance) do
+    similarity_run(instance, """
+    def building(field):
+        return [
+            {'types': {'uuid': ['RANGE'], field: ['VECTOR']}, 'options': {'uuid': {}, field: {'dimension': 3, 'similarityFunction': 'cosine'}}, 'status': '[Indexing] 1/2: UNDER CONSTRUCTION'},
+            {'types': {'uuid': ['RANGE']}, 'options': {'uuid': {}}, 'status': 'OPERATIONAL'},
+        ]
+
+    async def run():
+        found = {}
+        original = g.driver.execute_query
+        async def under_construction(cypher, **params):
+            if cypher.startswith('CALL db.indexes()') and 'gralkor_label' in params:
+                field = 'fact_embedding' if params['gralkor_label'] == 'RELATES_TO' else 'name_embedding'
+                return building(field), ['types', 'options', 'status'], None
+            return await original(cypher, **params)
+        for kind in ('fact', 'entity'):
+            g.driver.execute_query = under_construction
+            try:
+                result = await compare(kind, SearchFilters(), 4, 0.6)
+            finally:
+                del g.driver.execute_query
+            found[kind] = result
+        return found
+    run()
+    """)
+  end
+
+  defp unindexed_search(instance) do
+    similarity_run(instance, """
+    async def run():
+        await g.driver.execute_query('DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)')
+        await g.driver.execute_query('DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)')
+        return {kind: await compare(kind, SearchFilters(), 4, 0.6) for kind in ('fact', 'entity')}
+    run()
+    """)
+  end
+
+  defp naming_searches(instance) do
+    similarity_run(instance, """
+    async def named(restriction, source=None, target=None, group_ids=None):
+        function = search_module.edge_similarity_search
+        async def wrapped():
+            return [e.uuid for e in await function(g.driver, QUERY, source, target, restriction, group_ids, 4, 0.6)]
+        found, sent = await recorded(wrapped)
+        own = [e.uuid for e in await function._gralkor_original(g.driver, QUERY, source, target, restriction, group_ids, 4, 0.6)]
+        return {'wrapped': found, 'own': own, 'sent': [entry['cypher'] for entry in sent]}
+
+    async def run():
+        return [
+            await named(SearchFilters(edge_uuids=['f1', 'f2', 'f3'])),
+            await named(SearchFilters(edge_source_node_uuids=['s1', 't1'], edge_target_node_uuids=['s1', 't1'])),
+            await named(SearchFilters(), source='s2', group_ids=['g']),
+            await named(SearchFilters(), target='t2', group_ids=['g']),
+        ]
+    run()
+    """)
+  end
+
+  defp ingestion_fact_search(instance, filter) do
+    similarity_run(
+      instance,
+      """
+      from graphiti_core.search.search_config_recipes import EDGE_HYBRID_SEARCH_RRF
+      async def run():
+          _, sent = await recorded(lambda: search_module.search(
+              g.clients, 'amber', ['g'], EDGE_HYBRID_SEARCH_RRF.model_copy(deep=True), FILTER, query_vector=QUERY))
+          return [entry['cypher'] for entry in sent]
+      run()
+      """
+      |> String.replace("FILTER", filter)
+    )
   end
 
   defp memory_search_outcome(options) do
@@ -3915,28 +4789,27 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Enum.uniq(shareds) == [shared]
     end
 
-    test "and the graph library's node and edge filter constructors, fact similarity search, episode full-text search, and fact and entity result columns are wrapped once, before any search" do
+    test "and the graph library's node and edge filter constructors, its fact similarity search, its entity similarity search both where searching calls it and where adding an episode calls it to find an extracted entity's possible duplicates, its episode full-text search, and its fact and entity result columns are wrapped once, before any search" do
+      assert_graph_librarys_node_edge_filter_constructors_fact_similarity()
+    end
+
+    test "and the graph library's reading of facts by identifier, its loading of a fact's embedding, and its deletion of relationships by identifier are wrapped once, before any graph operation" do
       unwrap_search_filters()
-      refute Enum.any?(wrapped_search_functions(), fn [_name, _id, wrapped?] -> wrapped? end)
+      refute Enum.any?(identifier_wraps(), fn [_name, _id, wrapped?] -> wrapped? end)
 
       %{pid: first} = start_pool([])
-      wrapped = wrapped_search_functions()
+      wrapped = identifier_wraps()
 
       assert Enum.map(wrapped, &hd/1) == [
-               "graphiti_core.search.search_utils.node_search_filter_query_constructor",
-               "graphiti_core.search.search_utils.edge_search_filter_query_constructor",
-               "graphiti_core.driver.falkordb.operations.search_ops.node_search_filter_query_constructor",
-               "graphiti_core.driver.falkordb.operations.search_ops.edge_search_filter_query_constructor",
-               "graphiti_core.search.search.episode_fulltext_search",
-               "graphiti_core.search.search.edge_similarity_search",
-               "graphiti_core.search.search_utils.get_entity_edge_return_query",
-               "graphiti_core.search.search_utils.get_entity_node_return_query"
+               "graphiti_core.edges.EntityEdge.get_by_uuids",
+               "graphiti_core.edges.EntityEdge.load_fact_embedding",
+               "graphiti_core.edges.Edge.delete_by_uuids"
              ]
 
       assert Enum.all?(wrapped, fn [_name, _id, wrapped?] -> wrapped? end)
 
       %{pid: second} = start_pool([])
-      assert wrapped_search_functions() == wrapped
+      assert identifier_wraps() == wrapped
 
       GenServer.stop(first)
       GenServer.stop(second)
@@ -3984,6 +4857,19 @@ defmodule Gralkor.GraphitiPoolTest do
       %{pid: pid} = start_pool([])
       GenServer.stop(pid)
 
+      {reader, _} =
+        Pythonx.eval(
+          "import graphiti_core.search.search_utils as search_utils\nsearch_utils.get_entity_node_from_record",
+          %{}
+        )
+
+      on_exit(fn ->
+        Pythonx.eval(
+          "import graphiti_core.search.search_utils as search_utils\nsearch_utils.get_entity_node_from_record = reader\nNone",
+          %{"reader" => reader}
+        )
+      end)
+
       for {mutation, function} <- [
             {"del falkor_search_ops.node_search_filter_query_constructor",
              "graphiti_core.driver.falkordb.operations.search_ops.node_search_filter_query_constructor"},
@@ -3991,10 +4877,21 @@ defmodule Gralkor.GraphitiPoolTest do
              "graphiti_core.search.search.episode_fulltext_search"},
             {"async def changed(driver, search_vector):\n    return []\nsearch_module.edge_similarity_search = changed",
              "graphiti_core.search.search.edge_similarity_search"},
+            {"async def changed(driver, search_vector):\n    return []\nsearch_module.node_similarity_search = changed",
+             "graphiti_core.search.search.node_similarity_search"},
+            {"del node_operations.node_similarity_search",
+             "graphiti_core.utils.maintenance.node_operations.node_similarity_search"},
+            {"edges_module.EntityEdge.get_by_uuids = classmethod(lambda cls, driver: None)",
+             "graphiti_core.edges.EntityEdge.get_by_uuids"},
+            {"edges_module.EntityEdge.load_fact_embedding = lambda self: None",
+             "graphiti_core.edges.EntityEdge.load_fact_embedding"},
+            {"del edges_module.Edge.delete_by_uuids", "graphiti_core.edges.Edge.delete_by_uuids"},
             {"search_utils.get_entity_edge_return_query = lambda provider: 'e.uuid AS uuid'",
              "graphiti_core.search.search_utils.get_entity_edge_return_query"},
             {"from falkordb.asyncio.graph import AsyncGraph\nasync def changed(self, q):\n    return None\nAsyncGraph.query = changed",
-             "falkordb.asyncio.graph.AsyncGraph.query"}
+             "falkordb.asyncio.graph.AsyncGraph.query"},
+            {"search_utils.get_entity_node_from_record = lambda record: None",
+             "graphiti_core.search.search_utils.get_entity_node_from_record"}
           ] do
         unwrap_search_filters()
         Pythonx.eval(@search_filter_targets <> mutation <> "\nNone", %{})
@@ -6013,6 +6910,15 @@ defmodule Gralkor.GraphitiPoolTest do
 
     on_exit(fn -> File.rm_rf!(data_dir) end)
 
+    {embedder, _} =
+      Pythonx.eval(
+        """
+        from graphiti_core.embedder.openai import OpenAIEmbedder, OpenAIEmbedderConfig
+        OpenAIEmbedder(config=OpenAIEmbedderConfig(api_key='unused', base_url='http://127.0.0.1:1', embedding_dim=3))
+        """,
+        %{}
+      )
+
     pid =
       start_supervised!(
         {GraphitiPool,
@@ -6020,7 +6926,7 @@ defmodule Gralkor.GraphitiPoolTest do
          table: :"index_pool_#{System.unique_integer([:positive])}",
          falkordb_spec: {:embedded, data_dir},
          construct_shared_clients: fn _spec ->
-           %{llm_client: nil, embedder: nil, cross_encoder: nil}
+           %{llm_client: nil, embedder: embedder, cross_encoder: nil}
          end,
          warmup: false,
          install_loop_fn: &Gralkor.Python.install_async_runtime/0}
@@ -6086,4 +6992,302 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   defp graph_indexes(instance), do: graph_query(instance, @index_listing)
+
+  defp assert_results_that_passed_are_returned(%{instance: instance}) do
+    found = crowded_search(instance)
+
+    assert Enum.sort(found["facts"]) == ["exact-1", "exact-2"]
+  end
+
+  defp assert_index_building_fails_naming_graph_index_dimension_similarity(%{pid: pid}) do
+    instance = GraphitiPool.for(pid, "fresh")
+
+    graph_query(instance, "DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)")
+    graph_query(instance, "DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)")
+
+    graph_query(
+      instance,
+      "CREATE VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding) OPTIONS {dimension: 4, similarityFunction: 'cosine'}"
+    )
+
+    assert {:error, {:python, message}} = GraphitiPool.build_indices(pid)
+    assert message =~ "RuntimeError: graph #{physical("fresh")}"
+    assert message =~ "RELATES_TO.fact_embedding"
+    assert message =~ "cosine at 4 dimensions"
+    assert message =~ "the embedder writes 3"
+    assert message =~ "DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)"
+  end
+
+  defp assert_fact_similarity_query_returns_facts_in_same_order_that_graph(%{instance: instance}) do
+    compared = since_search(instance)["similarity"]
+
+    assert Enum.map(compared, & &1["wrapped"]) == [
+             ["new-edge", "at-edge"],
+             ["new-edge", "at-edge", "old-edge"],
+             ["new-edge", "at-edge"],
+             ["at-edge"],
+             ["new-edge", "at-edge"],
+             ["new-edge", "at-edge"],
+             []
+           ]
+
+    for %{"wrapped" => wrapped, "own" => own} <- compared, do: assert(wrapped == own)
+  end
+
+  defp assert_fact_similarity_query_finds_facts_through_creationtime_index(%{instance: instance}) do
+    %{"similarity_plan" => plan} = since_search(instance)
+
+    assert [scan] = Enum.filter(plan, &(&1 =~ "Scan"))
+    assert scan =~ "Edge By Index Scan | [e:RELATES_TO]"
+    assert List.last(plan) == scan
+  end
+
+  defp assert_group_graph_librarys_own_filters_included_excluded_writers_e(%{instance: instance}) do
+    found =
+      similarity_run(instance, """
+      async def run():
+          restriction = Filters(
+              edge_types=['OWNS'], node_labels=['Person', 'Team'], writers=['lens:*'],
+              excluded_writers=['lens:beta'], since='2026-01-05T00:00:00Z',
+          )
+          facts, sent = await recorded(lambda: search('fact', restriction, 4, 0.6, ['g']))
+          rows = await fact_rows(facts)
+          return {'facts': facts, 'rows': rows, 'sent': sent}
+      run()
+      """)
+
+    [lookup] = Enum.filter(found["sent"], &(&1["cypher"] =~ "db.idx.vector"))
+    cypher = lookup["cypher"]
+
+    for clause <- [
+          "e.group_id IN $group_ids",
+          "e.name in $edge_types",
+          "(n:Person OR n:Team) AND (m:Person OR m:Team)",
+          "e._gralkor_writers",
+          "e.created_at >= $gralkor_since"
+        ] do
+      assert cypher =~ clause
+    end
+
+    {start_node, _} = :binary.match(cypher, "startNode(e)")
+    {limit, _} = :binary.match(cypher, "LIMIT $limit")
+
+    for clause <- [
+          "e.group_id IN $group_ids",
+          "e._gralkor_writers",
+          "e.created_at >= $gralkor_since"
+        ] do
+      {at, _} = :binary.match(cypher, clause)
+      assert at < start_node
+    end
+
+    assert limit > start_node
+    refute Enum.any?(found["sent"], &(&1["cypher"] =~ "vec.cosineDistance"))
+    assert length(found["facts"]) == 4
+
+    for row <- found["rows"] do
+      assert row["group_id"] == "g"
+      assert row["name"] == "OWNS"
+      assert Enum.any?(row["writers"], &String.starts_with?(&1, "lens:"))
+      refute row["writers"] == ["lens:beta"]
+      assert row["created_at"] >= "2026-01-05"
+    end
+  end
+
+  defp assert_each_result_scored_as_graph_library_scores_it_only_results_s(%{instance: instance}) do
+    found =
+      similarity_run(instance, """
+      async def run():
+          facts, sent = await recorded(lambda: search('fact', SearchFilters(), 13, 0.9))
+          return {'scores': await scores('fact', facts), 'all': await all_scores('fact'), 'sent': sent}
+      run()
+      """)
+
+    assert length(found["scores"]) == 13
+    assert Enum.all?(found["scores"], &(&1 > 0.9))
+    assert found["scores"] == Enum.sort(found["scores"], :desc)
+    assert Enum.count(found["all"], &(&1 > 0.9)) == 13
+    assert Enum.any?(found["all"], &(&1 <= 0.9))
+    refute Enum.any?(found["sent"], &(&1["cypher"] =~ "vec.cosineDistance"))
+  end
+
+  defp assert_no_stored_embedding_compared_with_searchs_outside_vector_ind(%{instance: instance}) do
+    for compared <- restriction_comparisons(instance) do
+      assert Enum.any?(compared["sent"], &(&1 =~ "db.idx.vector")), compared["restriction"]
+      refute Enum.any?(compared["sent"], &(&1 =~ "vec.cosineDistance")), compared["restriction"]
+    end
+  end
+
+  defp assert_search_returns_as_many_results_as_graph_librarys_own_query_r(%{instance: instance}) do
+    for compared <- restriction_comparisons(instance) do
+      assert length(compared["wrapped"]) == length(compared["own"]), compared["restriction"]
+      assert length(compared["wrapped"]) == 4, compared["restriction"]
+    end
+  end
+
+  defp assert_every_result_scores_at_least_as_high_as_lowestscoring_result(%{instance: instance}) do
+    for compared <- restriction_comparisons(instance) do
+      lowest = List.last(compared["own_scores"])
+
+      assert Enum.all?(compared["wrapped_scores"], &(&1 >= lowest - 1.0e-6)),
+             compared["restriction"]
+    end
+  end
+
+  defp assert_graph_librarys_own_query_not_sent(%{instance: instance}) do
+    found = crowded_search(instance)
+
+    assert [lookup] = Enum.filter(found["sent"], &(&1 =~ "db.idx.vector"))
+    assert lookup =~ "queryRelationships"
+    refute Enum.any?(found["sent"], &(&1 =~ "vec.cosineDistance"))
+    assert found["reached"] == found["k"]
+  end
+
+  defp assert_search_answers_with_graph_librarys_own_query_under_same_rest(%{instance: instance}) do
+    found = fallback_searches(instance)
+
+    for {case_name, expected} <- [
+          {"writers", "vec.cosineDistance"},
+          {"since", "MATCH ()-[e:RELATES_TO]->()"},
+          {"none passed", "vec.cosineDistance"},
+          {"entity writers", "vec.cosineDistance"}
+        ] do
+      [lookup, own] = Enum.reject(found[case_name]["sent"], &(&1 =~ "CALL db.indexes()"))
+      assert lookup =~ "db.idx.vector", case_name
+      assert own =~ expected, case_name
+    end
+
+    assert String.starts_with?(
+             List.last(found["since"]["sent"]),
+             "MATCH ()-[e:RELATES_TO]->()"
+           )
+  end
+
+  defp assert_returns_as_many_results_as_that_query_does(%{instance: instance}) do
+    found = fallback_searches(instance)
+
+    for case_name <- ["writers", "since", "none passed", "entity writers"] do
+      assert found[case_name]["wrapped"] == found[case_name]["own"], case_name
+    end
+
+    assert length(found["writers"]["wrapped"]) == 2
+    assert found["none passed"]["wrapped"] == []
+  end
+
+  defp assert_fact_search_returns_as_many_results_as_graph_librarys_own_qu(%{instance: instance}) do
+    compared = distant_writer_search(instance, "fact")
+
+    assert length(compared["wrapped"]) == 4
+    assert length(compared["wrapped"]) == length(compared["own"])
+    lowest = List.last(compared["own_scores"])
+    assert Enum.all?(compared["wrapped_scores"], &(&1 >= lowest - 1.0e-6))
+  end
+
+  defp assert_entity_search_returns_as_many_results_as_graph_librarys_own(%{instance: instance}) do
+    compared = distant_writer_search(instance, "entity")
+
+    assert length(compared["wrapped"]) == 4
+    assert length(compared["wrapped"]) == length(compared["own"])
+    lowest = List.last(compared["own_scores"])
+    assert Enum.all?(compared["wrapped_scores"], &(&1 >= lowest - 1.0e-6))
+  end
+
+  defp assert_graph_librarys_node_edge_filter_constructors_fact_similarity do
+    unwrap_search_filters()
+    refute Enum.any?(wrapped_search_functions(), fn [_name, _id, wrapped?] -> wrapped? end)
+
+    %{pid: first} = start_pool([])
+    wrapped = wrapped_search_functions()
+
+    assert Enum.map(wrapped, &hd/1) == [
+             "graphiti_core.search.search_utils.node_search_filter_query_constructor",
+             "graphiti_core.search.search_utils.edge_search_filter_query_constructor",
+             "graphiti_core.driver.falkordb.operations.search_ops.node_search_filter_query_constructor",
+             "graphiti_core.driver.falkordb.operations.search_ops.edge_search_filter_query_constructor",
+             "graphiti_core.search.search.episode_fulltext_search",
+             "graphiti_core.search.search.edge_similarity_search",
+             "graphiti_core.search.search.node_similarity_search",
+             "graphiti_core.utils.maintenance.node_operations.node_similarity_search",
+             "graphiti_core.search.search_utils.get_entity_edge_return_query",
+             "graphiti_core.search.search_utils.get_entity_node_return_query",
+             "graphiti_core.edges.EntityEdge.get_by_uuids",
+             "graphiti_core.edges.EntityEdge.load_fact_embedding",
+             "graphiti_core.edges.Edge.delete_by_uuids"
+           ]
+
+    assert Enum.all?(wrapped, fn [_name, _id, wrapped?] -> wrapped? end)
+
+    %{pid: second} = start_pool([])
+    assert wrapped_search_functions() == wrapped
+
+    GenServer.stop(first)
+    GenServer.stop(second)
+  end
+
+  defp embedder_dimension(instance) do
+    {dimension, _} = Pythonx.eval("g.embedder.config.embedding_dim", %{"g" => instance})
+    Pythonx.decode(dimension)
+  end
+
+  defp vector_index_options(instance) do
+    for index <-
+          graph_query(
+            instance,
+            "CALL db.indexes() YIELD label, types, options RETURN label, types, options"
+          ),
+        {field, kinds} <- index["types"],
+        "VECTOR" in kinds,
+        into: %{} do
+      options = index["options"][field]
+      {"#{index["label"]}.#{field}", {options["similarityFunction"], options["dimension"]}}
+    end
+  end
+
+  # Every query the group's graph instance sends while the pool rebuilds its
+  # indexes, after its vector indexes are dropped.
+  defp rebuilt_queries(pid, group_id) do
+    instance = GraphitiPool.for(pid, group_id)
+    graph_query(instance, "DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)")
+    graph_query(instance, "DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)")
+    recorded_build(pid, group_id)
+  end
+
+  defp recorded_build(pid, group_id) do
+    instance = GraphitiPool.for(pid, group_id)
+
+    {sent, _} =
+      Pythonx.eval(
+        """
+        sent = []
+        original = g.driver.execute_query
+        async def recording(cypher, **params):
+            sent.append(cypher)
+            return await original(cypher, **params)
+        g.driver.execute_query = recording
+        sent
+        """,
+        %{"g" => instance}
+      )
+
+    assert {:ok, _} = capture_log_result(fn -> GraphitiPool.build_indices(pid) end)
+
+    {sent, _} =
+      Pythonx.eval("del g.driver.execute_query\nlist(sent)", %{"g" => instance, "sent" => sent})
+
+    Pythonx.decode(sent)
+  end
+
+  defp mismatched_build(pid) do
+    instance = GraphitiPool.for(pid, "fresh")
+    graph_query(instance, "DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)")
+    graph_query(instance, "DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)")
+
+    graph_query(
+      instance,
+      "CREATE VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding) OPTIONS {dimension: 4, similarityFunction: 'cosine'}"
+    )
+
+    assert {:error, _} = GraphitiPool.build_indices(pid)
+    instance
+  end
 end
