@@ -271,11 +271,9 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
     Gralkor.Python.run_coroutine(
       """
       async def close_running():
-          clients = await database.connection.execute_command('CLIENT', 'LIST')
-          for line in str(clients).splitlines():
-              fields = dict(field.split('=', 1) for field in line.split(' ') if '=' in field)
-              if fields.get('cmd', '').lower() == 'graph.query':
-                  await database.connection.execute_command('CLIENT', 'KILL', 'ID', fields['id'])
+          for client in await database.connection.client_list():
+              if client.get('cmd', '').lower() == 'graph.query':
+                  await database.connection.client_kill_filter(_id=client['id'])
       close_running()
       """,
       %{"database" => database}
