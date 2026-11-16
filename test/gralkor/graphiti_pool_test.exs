@@ -3204,6 +3204,101 @@ defmodule Gralkor.GraphitiPoolTest do
                "episodes" => ["at-ep"]
              }
     end
+
+    test "and the fact similarity query returns the facts, in the same order, that the graph library's own query returns under the same restrictions",
+         %{instance: instance} do
+      compared = since_search(instance)["similarity"]
+
+      assert Enum.map(compared, & &1["wrapped"]) == [
+               ["new-edge", "at-edge"],
+               ["new-edge", "at-edge", "old-edge"],
+               ["new-edge", "at-edge"],
+               ["at-edge"],
+               ["new-edge", "at-edge"],
+               ["new-edge", "at-edge"],
+               []
+             ]
+
+      for %{"wrapped" => wrapped, "own" => own} <- compared, do: assert(wrapped == own)
+    end
+
+    test "and the fact similarity query finds its facts through the creation-time index before it reads any entity",
+         %{instance: instance} do
+      %{"similarity_plan" => plan} = since_search(instance)
+
+      assert [scan] = Enum.filter(plan, &(&1 =~ "Scan"))
+      assert scan =~ "Edge By Index Scan | [e:RELATES_TO]"
+      assert List.last(plan) == scan
+    end
+
+    test "and the episode full-text query restricts the episodes the full-text index yields without looking each one up again",
+         %{instance: instance} do
+      %{"episode_plan" => plan, "episode_cypher" => cypher} = since_search(instance)
+
+      refute cypher =~ "MATCH"
+      refute Enum.any?(plan, &(&1 =~ "Scan"))
+      assert String.trim(List.last(plan)) == "ProcedureCall"
+    end
+  end
+
+  # Gives the aged graph's facts embeddings at different distances from one
+  # query vector, then runs the fact similarity search the started pool wraps
+  # and the graph library's own query under several restrictions, and the
+  # plans FalkorDB makes for the wrapped fact and episode queries.
+  defp since_search(instance) do
+    graph_query(
+      instance,
+      "MATCH ()-[e:RELATES_TO]->() SET e.fact_embedding = CASE e.uuid WHEN 'old-edge' THEN vecf32([0.7, 0.3, 0.0]) WHEN 'at-edge' THEN vecf32([0.8, 0.2, 0.0]) ELSE vecf32([1.0, 0.0, 0.0]) END"
+    )
+
+    """
+    import graphiti_core.search.search as search_module
+    import graphiti_core.search.search_utils as search_utils
+
+    Filters = search_utils._gralkor_search_filters
+    driver = g.driver
+    vector = [1.0, 0.0, 0.0]
+    restrictions = [
+        Filters(since='2026-06-01T00:00:00Z'),
+        Filters(since='2025-06-01T00:00:00Z'),
+        Filters(since='2026-06-01T00:00:00Z', writers=['lens:*']),
+        Filters(since='2026-06-01T00:00:00Z', excluded_writers=['lens:beta']),
+        Filters(since='2026-06-01T00:00:00Z', edge_types=['OWNS']),
+        Filters(since='2026-06-01T00:00:00Z', node_labels=['Entity', 'Missing']),
+        Filters(since='2026-06-01T00:00:00Z', edge_types=['KNOWS']),
+    ]
+
+    async def run():
+        similarity = []
+        for restriction in restrictions:
+            wrapped = await search_module.edge_similarity_search(driver, vector, None, None, restriction, None, 10, 0.5)
+            own = await search_module.edge_similarity_search._gralkor_original(driver, vector, None, None, restriction, None, 10, 0.5)
+            similarity.append({'wrapped': [e.uuid for e in wrapped], 'own': [e.uuid for e in own]})
+        sent = []
+        original = driver.execute_query
+        async def recording(cypher, **params):
+            params.pop('routing_', None)
+            sent.append((cypher, params))
+            return await original(cypher, **params)
+        driver.execute_query = recording
+        try:
+            await search_module.edge_similarity_search(driver, vector, None, None, restrictions[0], None, 10, 0.5)
+            await search_module.episode_fulltext_search(driver, 'amber', restrictions[0], None, 10)
+        finally:
+            del driver.execute_query
+        graph = driver._get_graph(driver._database)
+        plans = [str(await graph.explain(cypher, params)).splitlines() for cypher, params in sent]
+        return {
+            'similarity': similarity,
+            'similarity_plan': plans[0],
+            'episode_plan': plans[1],
+            'episode_cypher': sent[1][0],
+        }
+
+    run()
+    """
+    |> Gralkor.Python.run_coroutine(%{"g" => instance})
+    |> Pythonx.decode()
   end
 
   # One group's graph holding an episode, an entity, and a fact created before
