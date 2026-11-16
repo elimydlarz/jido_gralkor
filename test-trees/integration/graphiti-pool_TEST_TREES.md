@@ -101,6 +101,7 @@ when an episode is added
   then its name combines the current millisecond timestamp with a positive monotonic unique integer, so concurrent writes remain distinguishable without claiming an episode UUID
   and the episode records its one writer: its Lens, the Reflection its source description names, direct, or `unknown`
   and every fact and entity the write touched records the writers of every episode it was drawn from or that mentions it, keeping writers recorded earlier
+  and no query the write sends carries a query timeout
   while an embedded connection is configured
     while another episode addition is in progress
       then the graph library receives the episode only after the in-progress addition finishes
