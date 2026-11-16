@@ -81,10 +81,12 @@ defmodule Gralkor.GraphitiPoolTest do
       Pythonx.eval(
         @search_filter_targets <>
           """
+          from falkordb.asyncio.graph import AsyncGraph
           saved = (
-              [(module, name, getattr(module, name, None)) for module, name in targets],
+              [(module, name, getattr(module, name, None)) for module, name in targets + [(AsyncGraph, 'query')]],
               getattr(search_utils, '_gralkor_search_filters', None),
               getattr(search_utils, '_gralkor_search_filter_originals', None),
+              getattr(search_utils, '_gralkor_read_timeout', None),
           )
           for module, name, function in (saved[2] or []):
               setattr(module, name, function)
@@ -98,11 +100,12 @@ defmodule Gralkor.GraphitiPoolTest do
       Pythonx.eval(
         @search_filter_targets <>
           """
-          functions, installed, originals = saved
+          functions, installed, originals, read_timeout = saved
           for module, name, function in functions:
               setattr(module, name, function)
           search_utils._gralkor_search_filters = installed
           search_utils._gralkor_search_filter_originals = originals
+          search_utils._gralkor_read_timeout = read_timeout
           None
           """,
         %{"saved" => saved}
