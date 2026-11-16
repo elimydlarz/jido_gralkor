@@ -3239,14 +3239,24 @@ defmodule Gralkor.GraphitiPool do
     @registry
   end
 
-  defp register_table(pid, table) do
+  defp register_table(pid, table, read_timeout_ms) do
     ensure_registry()
-    :ets.insert(@registry, {pid, table})
+    :ets.insert(@registry, [{pid, table}, {{:read_timeout_ms, table}, read_timeout_ms}])
   end
 
-  defp unregister_table(pid) do
+  defp unregister_table(pid, table) do
     ensure_registry()
     :ets.delete(@registry, pid)
+    :ets.delete(@registry, {:read_timeout_ms, table})
+  end
+
+  defp read_timeout_ms(socket_timeout) when is_number(socket_timeout),
+    do: max(trunc(socket_timeout * 900), 1)
+
+  defp read_timeout_ms(server) do
+    table = table_for(server)
+    [{_, read_timeout_ms}] = :ets.lookup(ensure_registry(), {:read_timeout_ms, table})
+    read_timeout_ms
   end
 
   defp table_for(server) when is_atom(server) do
