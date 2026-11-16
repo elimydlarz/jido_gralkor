@@ -156,10 +156,10 @@ defmodule Gralkor.Reflection.ChainOfThoughtTest do
       first = step("first", %{"blocked tasks" => "string"})
 
       for name <- ["blocked tasks", "blocked.tasks", "blöcked/tasks?", ""] do
-        later = %{step("second", %{"done" => "boolean"}) | directions: "Use {{ #{name} }}."}
+        referencing = %{first | directions: "Use {{ #{name} }}."}
 
         assert {:error, {:unknown_interpolation, ^name, "first"}} =
-                 ChainOfThought.from_config(%{steps: [%{first | directions: "Use {{#{name}}}."}, later]})
+                 ChainOfThought.from_config(%{steps: [referencing]})
       end
 
       unknown = %{step("second", %{"done" => "boolean"}) | directions: "Use {{ blocked  tasks }}."}
