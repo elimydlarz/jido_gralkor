@@ -34,6 +34,7 @@ if an output name is declared by more than one step
 
 if an interpolation references an output not declared by an earlier step
   then parsing identifies the interpolation and current step
+  and an interpolation is identified whatever characters it holds
 
 when a value is checked against a consumed structured-output type
   then string, boolean, and integer declarations enforce their corresponding JSON value types
