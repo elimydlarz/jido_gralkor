@@ -841,7 +841,6 @@ defmodule Gralkor.GraphitiPool do
 
         import graphiti_core.search.search_utils as search_utils
 
-        #{@episode_writer_hydration}
         #{@fact_rendering}
         WriterSearchFilters = search_utils._gralkor_search_filters
         if WriterSearchFilters is None:
