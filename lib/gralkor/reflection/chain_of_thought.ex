@@ -104,10 +104,16 @@ defmodule Gralkor.Reflection.ChainOfThought do
     end
   end
 
+  @placeholder ~r/\{\{(.*?)\}\}/s
+
   def interpolations(directions) do
-    ~r/\{\{\s*([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}/
+    @placeholder
     |> Regex.scan(directions, capture: :all_but_first)
-    |> List.flatten()
+    |> Enum.map(fn [name] -> String.trim(name) end)
+  end
+
+  def interpolate(directions, value_of) do
+    Regex.replace(@placeholder, directions, fn _, name -> value_of.(String.trim(name)) end)
   end
 
   def matches_type?(value, declaration) do
