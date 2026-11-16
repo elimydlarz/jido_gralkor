@@ -2491,7 +2491,7 @@ defmodule Gralkor.GraphitiPool do
   @impl true
   def terminate(_reason, state) do
     :ok = state.close_falkor_db.(state.falkor_db)
-    unregister_table(self())
+    unregister_table(self(), state.table)
     :ets.delete(state.table)
     :ok
   end
