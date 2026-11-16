@@ -176,6 +176,7 @@ when a fact search is run for a group
   and each returned edge identifies its originating episodes by identifier, source kind, and source description
   and each returned edge is rendered with its relationship name and the name and identifier of its source and target entities
   and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints
+  and every query the search sends carries a FalkorDB query timeout below the socket timeout
   where edge types are supplied
     then the graph library's edge search is restricted to those ontology relationship types
 
