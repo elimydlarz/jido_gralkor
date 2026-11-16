@@ -3504,7 +3504,7 @@ defmodule Gralkor.GraphitiPoolTest do
       assert Enum.uniq(shareds) == [shared]
     end
 
-    test "and the graph library's node and edge filter constructors and episode full-text search are wrapped once, before any search" do
+    test "and the graph library's node and edge filter constructors, fact similarity search, episode full-text search, and fact and entity result columns are wrapped once, before any search" do
       unwrap_search_filters()
       refute Enum.any?(wrapped_search_functions(), fn [_name, _id, wrapped?] -> wrapped? end)
 
@@ -3516,13 +3516,32 @@ defmodule Gralkor.GraphitiPoolTest do
                "graphiti_core.search.search_utils.edge_search_filter_query_constructor",
                "graphiti_core.driver.falkordb.operations.search_ops.node_search_filter_query_constructor",
                "graphiti_core.driver.falkordb.operations.search_ops.edge_search_filter_query_constructor",
-               "graphiti_core.search.search.episode_fulltext_search"
+               "graphiti_core.search.search.episode_fulltext_search",
+               "graphiti_core.search.search.edge_similarity_search",
+               "graphiti_core.search.search_utils.get_entity_edge_return_query",
+               "graphiti_core.search.search_utils.get_entity_node_return_query"
              ]
 
       assert Enum.all?(wrapped, fn [_name, _id, wrapped?] -> wrapped? end)
 
       %{pid: second} = start_pool([])
       assert wrapped_search_functions() == wrapped
+
+      GenServer.stop(first)
+      GenServer.stop(second)
+    end
+
+    test "and the graph client's query is wrapped once, before any search, so a search can give its queries a query timeout" do
+      unwrap_search_filters()
+      refute graph_client_query()["wrapped"]
+
+      %{pid: first} = start_pool([])
+      wrapped = graph_client_query()
+      assert wrapped["wrapped"]
+      assert wrapped["read_timeout"]
+
+      %{pid: second} = start_pool([])
+      assert graph_client_query() == wrapped
 
       GenServer.stop(first)
       GenServer.stop(second)
