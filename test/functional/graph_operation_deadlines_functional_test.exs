@@ -140,6 +140,162 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
 
       assert capture_log(fn -> write(pool) end) =~ "stage:add_episode"
     end
+
+    test "and the write's graph query is sent once" do
+      pool = start_silent_remote_pool()
+
+      assert {:error, :timeout} = write(pool)
+      assert_received {:graph_command, _query}
+      Process.sleep(500)
+      refute_received {:graph_command, _query}
+    end
+  end
+
+  describe "when an episode write's graph query runs past the socket timeout on the embedded FalkorDB" do
+    setup [:start_slow_embedded_pool]
+
+    test "then the write returns `{:error, :timeout}`", %{pool: pool} do
+      assert {:error, :timeout} = write(pool)
+    end
+
+    test "and the query reaches FalkorDB once", %{pool: pool, database: database} do
+      assert {:error, :timeout} = write(pool)
+      assert slow_queries_on_server(database) == 1
+    end
+  end
+
+  describe "when a memory search's graph query runs past the socket timeout on the embedded FalkorDB" do
+    setup [:start_slow_embedded_pool]
+
+    test "then the search returns `{:error, :timeout}`", %{pool: pool} do
+      assert {:error, :timeout} = search(pool)
+    end
+
+    test "and the query reaches FalkorDB once", %{pool: pool, database: database} do
+      assert {:error, :timeout} = search(pool)
+      assert slow_queries_on_server(database) == 1
+    end
+  end
+
+  describe "if the embedded FalkorDB connection is closed while an episode write's graph query runs" do
+    setup [:start_slow_embedded_pool]
+
+    test "then the write returns an error naming the closed connection", %{
+      pool: pool,
+      database: database
+    } do
+      assert {:error, {:python, message}} = write_while_closing(pool, database)
+      assert message =~ "ConnectionError"
+    end
+
+    test "and the query reaches FalkorDB once", %{pool: pool, database: database} do
+      assert {:error, {:python, _message}} = write_while_closing(pool, database)
+      assert slow_queries_on_server(database) == 1
+    end
+  end
+
+  @slow_query "MATCH (a:Slow), (b:Slow), (c:Slow), (d:Slow) RETURN count(*) AS slow"
+
+  # An embedded FalkorDB with a one-second socket timeout whose graph instance
+  # runs one slow query for every episode write and search. FalkorDB itself
+  # stops that query after eight seconds, so it outlasts the socket timeout and
+  # is still running when the operation returns.
+  defp start_slow_embedded_pool(_context) do
+    data_dir =
+      Path.join(System.tmp_dir!(), "gralkor_slow_#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm_rf!(data_dir) end)
+    parent = self()
+
+    pool =
+      start_pool(
+        falkordb_spec: {:embedded, data_dir},
+        embedded_falkordb_socket_timeout_ms: 1_000,
+        graph_operation_deadline_ms: 60_000,
+        install_loop_fn: &Gralkor.Python.install_async_runtime/0,
+        construct_instance: fn database, _shared, group_id ->
+          send(parent, {:slow_database, database})
+          slow_graph(database, group_id)
+        end
+      )
+
+    GraphitiPool.for(pool, "deadlines")
+    assert_received {:slow_database, database}
+
+    Gralkor.Python.run_coroutine(
+      "database.select_graph('slow').query('UNWIND range(1, 400) AS i CREATE (:Slow {i: i})')",
+      %{"database" => database}
+    )
+
+    %{pool: pool, database: database}
+  end
+
+  defp slow_graph(database, group_id) do
+    {graph, _} =
+      Pythonx.eval(
+        """
+        from types import SimpleNamespace
+
+        class _SlowGraphiti:
+            def __init__(self):
+                self.driver = None
+                self.graph = database.select_graph('slow')
+
+            async def slow(self):
+                await self.graph.query(slow_query.decode('utf-8'), timeout=8000)
+
+            async def add_episode(self, **kwargs):
+                await self.slow()
+
+            async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                await self.slow()
+                return SimpleNamespace(edges=[], nodes=[], episodes=[])
+
+        _SlowGraphiti()
+        """,
+        %{"database" => database, "group_id" => group_id, "slow_query" => @slow_query}
+      )
+
+    graph
+  end
+
+  defp search(pool) do
+    GraphitiPool.search_memory(pool, "deadlines", "backups", Gralkor.Search.limits())
+  end
+
+  # Closes, from another connection, the connection that is running the slow
+  # query, once FalkorDB reports it running.
+  defp write_while_closing(pool, database) do
+    writer = Task.async(fn -> write(pool) end)
+    assert_eventually(fn -> slow_queries_on_server(database) == 1 end)
+
+    Gralkor.Python.run_coroutine(
+      """
+      async def close_running():
+          clients = await database.connection.execute_command('CLIENT', 'LIST')
+          for line in str(clients).splitlines():
+              fields = dict(field.split('=', 1) for field in line.split(' ') if '=' in field)
+              if fields.get('cmd', '').lower() == 'graph.query':
+                  await database.connection.execute_command('CLIENT', 'KILL', 'ID', fields['id'])
+      close_running()
+      """,
+      %{"database" => database}
+    )
+
+    Task.await(writer, 30_000)
+  end
+
+  # How many copies of the slow query FalkorDB is running or holding in its
+  # queue.
+  defp slow_queries_on_server(database) do
+    Gralkor.Python.run_coroutine(
+      "database.connection.execute_command('GRAPH.INFO')",
+      %{"database" => database}
+    )
+    |> Pythonx.decode()
+    |> then(fn ["# Running queries", running, "# Waiting queries", waiting | _] ->
+      Enum.count(running ++ waiting, &(inspect(&1) =~ "MATCH (a:Slow)"))
+    end)
   end
 
   describe "when a graph operation outlasts `:graph_operation_deadline_ms`" do
