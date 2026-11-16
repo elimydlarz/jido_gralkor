@@ -151,6 +151,25 @@ defmodule Gralkor.Reflection.ChainOfThoughtTest do
       assert {:error, {:unknown_interpolation, "approved", "first"}} =
                ChainOfThought.from_config(%{steps: [forward, later]})
     end
+
+    test "and an interpolation is identified whatever characters it holds" do
+      first = step("first", %{"blocked tasks" => "string"})
+
+      for name <- ["blocked tasks", "blocked.tasks", "blöcked/tasks?", ""] do
+        later = %{step("second", %{"done" => "boolean"}) | directions: "Use {{ #{name} }}."}
+
+        assert {:error, {:unknown_interpolation, ^name, "first"}} =
+                 ChainOfThought.from_config(%{steps: [%{first | directions: "Use {{#{name}}}."}, later]})
+      end
+
+      unknown = %{step("second", %{"done" => "boolean"}) | directions: "Use {{ blocked  tasks }}."}
+
+      assert {:error, {:unknown_interpolation, "blocked  tasks", "second"}} =
+               ChainOfThought.from_config(%{steps: [first, unknown]})
+
+      known = %{step("second", %{"done" => "boolean"}) | directions: "Use {{ blocked tasks }}."}
+      assert {:ok, _} = ChainOfThought.from_config(%{steps: [first, known]})
+    end
   end
 
   describe "when a value is checked against a consumed structured-output type" do
