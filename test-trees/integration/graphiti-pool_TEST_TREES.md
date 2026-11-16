@@ -193,6 +193,13 @@ when a memory search is run for a group
   and each returned episode is rendered with the body that was written, its source description, and its source kind
   and facts, nodes, and episodes are each returned in the graph library's relevance order and cut to their own requested limit
   and nothing an extractor derived from an episode is needed to return it, so an episode no entity was extracted from is still returned
+  and the fact and entity queries bring back no embedding from FalkorDB
+  and each fact and entity still carries every other stored property among its attributes
+  and after the graph library's search, the facts' source episodes, the writers and extraction completion recorded on those and the returned episodes, and the facts' entity names are read by three queries sent together
+  and every query the search sends carries a FalkorDB query timeout below the socket timeout
+  if a query the search sends runs past that query timeout
+    then FalkorDB stops running it
+    and the search returns FalkorDB's timeout error
   while node labels are supplied
     then the single search's filter carries those labels
     while several node labels are supplied
