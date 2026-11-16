@@ -1955,6 +1955,18 @@ defmodule Gralkor.GraphitiPoolTest do
     test "and a standalone custom-entity node cannot be returned, because edge search matches edges by their endpoints" do
       assert_fact_excludes_standalone_node()
     end
+
+    test "and every query the search sends carries a FalkorDB query timeout below the socket timeout" do
+      %{pid: pid} = start_real_searching_pool(%{})
+      spy = spy_query_timeouts()
+
+      assert {:ok, [%{fact: "amber owns other", sources: [_]}]} =
+               GraphitiPool.search(pid, "searching", "amber", 5)
+
+      timeouts = spied_timeouts(spy)
+      assert length(timeouts) >= 3
+      assert Enum.uniq(timeouts) == [3_600]
+    end
   end
 
   describe "when a fact search is run for a group > where edge types are supplied" do
