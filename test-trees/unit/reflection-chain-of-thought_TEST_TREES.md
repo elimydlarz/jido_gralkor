@@ -46,3 +46,4 @@ when a value is checked against a consumed structured-output type
 
 when natural-language directions contain output interpolations
   then their referenced output names are returned in occurrence order
+  and each name is the text between the double braces without its surrounding spaces, whatever characters it holds
