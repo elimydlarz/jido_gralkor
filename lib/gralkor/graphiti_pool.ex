@@ -956,7 +956,8 @@ defmodule Gralkor.GraphitiPool do
           "edge_types" => Keyword.get(opts, :edge_types),
           "writers" => Keyword.get(opts, :writers),
           "excluded_writers" => Keyword.get(opts, :excluded_writers),
-          "since" => since_text(Keyword.get(opts, :since))
+          "since" => since_text(Keyword.get(opts, :since)),
+          "read_timeout_ms" => read_timeout_ms(server)
         }
       )
 
