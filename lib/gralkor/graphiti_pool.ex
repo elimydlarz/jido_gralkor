@@ -890,19 +890,10 @@ defmodule Gralkor.GraphitiPool do
             and bool(source_description[len('reflection:'):])
           )
 
-        async def completed_reflection_episodes(episodes):
-          episode_ids = [e.uuid for e in episodes if reflection_episode(e)]
-          if not episode_ids:
-            return episodes
-          if hasattr(g.driver, 'execute_query'):
-            records, _, _ = await g.driver.execute_query(
-              "MATCH (e:Episodic) WHERE e.uuid IN $uuids AND coalesce(e._gralkor_extraction_complete, false) = true RETURN e.uuid AS uuid",
-              uuids=episode_ids,
-            )
-            completed_ids = {record['uuid'] for record in records}
-          else:
-            completed_ids = set(getattr(g.driver, '_gralkor_completed_episode_uuids', set()))
-          return [e for e in episodes if not reflection_episode(e) or e.uuid in completed_ids]
+        def completed(episode, recorded):
+          if episode.uuid in recorded:
+            return bool(recorded[episode.uuid]['complete'])
+          return episode.uuid in getattr(g.driver, '_gralkor_completed_episode_uuids', set())
 
         def episode_result(episode):
           result = {
