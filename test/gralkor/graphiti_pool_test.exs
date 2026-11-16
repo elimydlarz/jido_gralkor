@@ -3598,7 +3598,13 @@ defmodule Gralkor.GraphitiPoolTest do
             {"del falkor_search_ops.node_search_filter_query_constructor",
              "graphiti_core.driver.falkordb.operations.search_ops.node_search_filter_query_constructor"},
             {"async def changed(driver, query):\n    return []\nsearch_module.episode_fulltext_search = changed",
-             "graphiti_core.search.search.episode_fulltext_search"}
+             "graphiti_core.search.search.episode_fulltext_search"},
+            {"async def changed(driver, search_vector):\n    return []\nsearch_module.edge_similarity_search = changed",
+             "graphiti_core.search.search.edge_similarity_search"},
+            {"search_utils.get_entity_edge_return_query = lambda provider: 'e.uuid AS uuid'",
+             "graphiti_core.search.search_utils.get_entity_edge_return_query"},
+            {"from falkordb.asyncio.graph import AsyncGraph\nasync def changed(self, q):\n    return None\nAsyncGraph.query = changed",
+             "falkordb.asyncio.graph.AsyncGraph.query"}
           ] do
         unwrap_search_filters()
         Pythonx.eval(@search_filter_targets <> mutation <> "\nNone", %{})
