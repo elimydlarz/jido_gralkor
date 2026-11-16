@@ -2798,6 +2798,8 @@ defmodule Gralkor.GraphitiPool do
         import asyncio
         import redis.exceptions
         from redis.asyncio.connection import BlockingConnectionPool
+        from redis.asyncio.retry import Retry
+        from redis.backoff import NoBackoff
         from falkordb.asyncio import FalkorDB
 
         # Waits up to the socket timeout for a free connection instead of
