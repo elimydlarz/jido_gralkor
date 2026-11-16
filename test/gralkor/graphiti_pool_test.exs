@@ -5497,6 +5497,120 @@ defmodule Gralkor.GraphitiPoolTest do
     )
   end
 
+  # A pool over a real embedded FalkorDB with a 4-second socket timeout whose
+  # graph instances search the real graph through the graph library's own
+  # full-text searches, as the pool wraps them, and may also run a slow query.
+  defp start_real_searching_pool(_context) do
+    data_dir =
+      Path.join(
+        System.tmp_dir!(),
+        "gralkor_searching_#{Base.url_encode64(:crypto.strong_rand_bytes(16), padding: false)}"
+      )
+
+    on_exit(fn -> File.rm_rf!(data_dir) end)
+    test_pid = self()
+
+    pid =
+      start_supervised!(
+        {GraphitiPool,
+         name: nil,
+         table: :"searching_pool_#{System.unique_integer([:positive])}",
+         falkordb_spec: {:embedded, data_dir},
+         embedded_falkordb_socket_timeout_ms: 4_000,
+         construct_shared_clients: fn _spec ->
+           %{llm_client: nil, embedder: nil, cross_encoder: nil}
+         end,
+         construct_instance: fn falkor_db, _shared, group_id ->
+           {g, _} =
+             Pythonx.eval(
+               """
+               from types import SimpleNamespace
+               from graphiti_core.driver.falkordb_driver import FalkorDriver
+               from graphiti_core.search.search_filters import SearchFilters
+               import graphiti_core.search.search as search_module
+               import graphiti_core.search.search_utils as search_utils
+
+               class _SearchingGraphiti:
+                   def __init__(self, falkor_db, group_id):
+                       self.driver = FalkorDriver(falkor_db=falkor_db, database=group_id)
+                       self.slow = None
+
+                   async def search_(self, query, config=None, group_ids=None, search_filter=None):
+                       edges = await search_utils.edge_fulltext_search(self.driver, query, search_filter, None, config.limit)
+                       nodes = await search_utils.node_fulltext_search(self.driver, query, search_filter, None, config.limit)
+                       episodes = await search_module.episode_fulltext_search(self.driver, query, search_filter, None, config.limit)
+                       if self.slow:
+                           await self.driver.execute_query(self.slow)
+                       return SimpleNamespace(edges=edges, nodes=nodes, episodes=episodes)
+
+                   async def search(self, query, num_results=10, search_filter=None):
+                       return await search_utils.edge_fulltext_search(
+                           self.driver, query, search_filter or SearchFilters(), None, num_results
+                       )
+
+               _SearchingGraphiti(falkor_db, group_id.decode('utf-8'))
+               """,
+               %{"falkor_db" => falkor_db, "group_id" => group_id}
+             )
+
+           send(test_pid, {:searching_graph, g})
+           g
+         end,
+         warmup: false,
+         install_loop_fn: &Gralkor.Python.install_async_runtime/0}
+      )
+
+    instance = GraphitiPool.for(pid, "searching")
+    assert_received {:searching_graph, ^instance}
+
+    graph_query(instance, """
+    CREATE (ep:Episodic {uuid: 'amber-ep', name: 'amber', group_id: 'g', source: 'text', source_description: 'notes [lens: alpha]', content: 'amber notes', entity_edges: [], created_at: '2026-06-01T00:00:00+00:00', valid_at: '2026-06-01T00:00:00+00:00', _gralkor_writers: ['lens:alpha']}),
+           (a:Entity {uuid: 'amber-node', name: 'amber node', group_id: 'g', summary: 'amber', created_at: '2026-06-01T00:00:00+00:00', _gralkor_writers: ['lens:alpha']}),
+           (b:Entity {uuid: 'other-node', name: 'other node', group_id: 'g', summary: 'other', created_at: '2026-06-01T00:00:00+00:00', _gralkor_writers: ['lens:alpha']}),
+           (a)-[:RELATES_TO {uuid: 'amber-edge', name: 'OWNS', fact: 'amber owns other', group_id: 'g', episodes: ['amber-ep'], created_at: '2026-06-01T00:00:00+00:00', _gralkor_writers: ['lens:alpha']}]->(b)
+    """)
+
+    %{pid: pid, instance: instance}
+  end
+
+  # Records the query timeout of every query the FalkorDB client sends until
+  # the test exits.
+  defp spy_query_timeouts do
+    {spy, _} =
+      Pythonx.eval(
+        """
+        from falkordb.asyncio.graph import AsyncGraph
+
+        class _TimeoutSpy:
+            def __init__(self):
+                self.timeouts = []
+                self.original = AsyncGraph._query
+                spy = self
+
+                async def _query(graph, q, params=None, timeout=None, read_only=False):
+                    spy.timeouts.append(timeout)
+                    return await spy.original(graph, q, params=params, timeout=timeout, read_only=read_only)
+
+                AsyncGraph._query = _query
+
+            def restore(self):
+                from falkordb.asyncio.graph import AsyncGraph
+                AsyncGraph._query = self.original
+
+        _TimeoutSpy()
+        """,
+        %{}
+      )
+
+    on_exit(fn -> Pythonx.eval("spy.restore()", %{"spy" => spy}) end)
+    spy
+  end
+
+  defp spied_timeouts(spy) do
+    {timeouts, _} = Pythonx.eval("list(spy.timeouts)", %{"spy" => spy})
+    Pythonx.decode(timeouts)
+  end
+
   defp start_real_embedded_pool(_context) do
     data_dir =
       Path.join(
