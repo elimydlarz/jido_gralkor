@@ -48,6 +48,7 @@ when an agent runtime validates Reflection declarations
 
   if an interpolation references an output not declared by an earlier step
     then validation fails identifying that Reflection, step, and interpolation
+    and an interpolation is identified whatever characters it holds
 
   if a Reflection's `outputs` value is not a list
     then validation fails identifying that Reflection and outputs value
