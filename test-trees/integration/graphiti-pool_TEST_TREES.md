@@ -199,7 +199,7 @@ when a memory search is run for a group
   and each fact and entity still carries every other stored property among its attributes
   and after the graph library's search, the facts' source episodes, the writers and extraction completion recorded on those and the returned episodes, and the facts' entity names are read by three queries sent together
   and every query the search sends carries a FalkorDB query timeout below the socket timeout
-  if a query the search sends runs past that query timeout
+  if a query the search sends runs past its FalkorDB query timeout
     then FalkorDB stops running it
     and the search returns FalkorDB's timeout error
   while node labels are supplied
