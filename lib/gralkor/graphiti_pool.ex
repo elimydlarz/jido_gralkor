@@ -202,7 +202,12 @@ defmodule Gralkor.GraphitiPool do
   #   carrying `since` a check that the record's own `created_at` is at or after
   #   it, each before its query's limit. Only the requested writer names,
   #   `lens:` or `reflection:` prefixes, and the time (as the UTC ISO 8601 text
-  #   graphiti's FalkorDB driver stores) are passed, never record identifiers.
+  #   graphiti's FalkorDB driver stores) are passed, never record identifiers;
+  # * with `since`, fact similarity search reads facts through the creation-time
+  #   index before it binds their entities, and episode full-text search checks
+  #   the node the full-text index yields instead of matching it again;
+  # * fact and entity queries return every property but the embedding;
+  # * the FalkorDB client's query takes the query timeout a search sets.
   #
   # Without those fields every query is graphiti's own. These are graphiti
   # internals, so each wrapped or reused function is checked for its pinned
