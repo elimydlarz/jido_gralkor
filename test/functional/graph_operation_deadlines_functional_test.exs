@@ -428,13 +428,16 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
 
   # Answers the connection handshake as a live server would, then never replies
   # to a graph command, as a deadlocked FalkorDB does.
+  # Tells the test process `{:graph_command, data}` for each graph command it
+  # receives.
   defp silent_server_port do
     {:ok, listener} = :gen_tcp.listen(0, [:binary, active: false, reuseaddr: true])
     {:ok, port} = :inet.port(listener)
+    test_pid = self()
 
     start_supervised!(%{
       id: :silent_server,
-      start: {Task, :start_link, [fn -> accept_connections(listener) end]}
+      start: {Task, :start_link, [fn -> accept_connections(listener, test_pid) end]}
     })
 
     on_exit(fn -> :gen_tcp.close(listener) end)
@@ -442,23 +445,26 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
     port
   end
 
-  defp accept_connections(listener) do
+  defp accept_connections(listener, test_pid) do
     case :gen_tcp.accept(listener) do
       {:ok, socket} ->
-        connection = spawn_link(fn -> receive_commands(socket) end)
+        connection = spawn_link(fn -> receive_commands(socket, test_pid) end)
         :ok = :gen_tcp.controlling_process(socket, connection)
-        accept_connections(listener)
+        accept_connections(listener, test_pid)
 
       {:error, _reason} ->
         :ok
     end
   end
 
-  defp receive_commands(socket) do
+  defp receive_commands(socket, test_pid) do
     case :gen_tcp.recv(socket, 0) do
       {:ok, data} ->
-        if String.contains?(data, "GRAPH."), do: :ok, else: reply_to_handshake(socket, data)
-        receive_commands(socket)
+        if String.contains?(data, "GRAPH."),
+          do: send(test_pid, {:graph_command, data}),
+          else: reply_to_handshake(socket, data)
+
+        receive_commands(socket, test_pid)
 
       {:error, _reason} ->
         :ok
