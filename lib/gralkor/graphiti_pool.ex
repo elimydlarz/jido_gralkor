@@ -2336,7 +2336,7 @@ defmodule Gralkor.GraphitiPool do
       end)
 
     :ets.new(table, [:set, :public, :named_table, read_concurrency: true])
-    register_table(self(), table, read_timeout_ms(socket_timeout))
+    register_table(self(), table, read_timeout_below(socket_timeout))
 
     :ok = install_loop_fn.()
 
