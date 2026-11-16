@@ -2770,10 +2770,13 @@ defmodule Gralkor.GraphitiPool do
     {db, _} =
       Pythonx.eval(
         """
+        from redis.asyncio.retry import Retry
+        from redis.backoff import NoBackoff
         from redislite.async_falkordb_client import AsyncFalkorDB
         AsyncFalkorDB(
           db_path.decode('utf-8') if isinstance(db_path, (bytes, bytearray)) else db_path,
           socket_timeout=socket_timeout,
+          retry=Retry(NoBackoff(), 0),
         )
         """,
         %{"db_path" => db_path, "socket_timeout" => socket_timeout}
