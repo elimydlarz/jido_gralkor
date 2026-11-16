@@ -2665,7 +2665,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a memory search is run for a group > if a query the search sends runs past that query timeout" do
+  describe "when a memory search is run for a group > if a query the search sends runs past its FalkorDB query timeout" do
     setup [:start_real_searching_pool, :search_slowly]
 
     test "then FalkorDB stops running it", %{pid: pid, outcome: outcome} do
