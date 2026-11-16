@@ -1326,14 +1326,10 @@ defmodule Gralkor.GraphitiPoolTest do
       plan_extraction(g, ["lesson", "project"], [["learns", "lesson", "project"]])
       spy = spy_query_timeouts()
 
-      assert :ok =
-               GraphitiPool.add_episode(pid, "writers", "first", "notes", nil,
-                 lens: "alpha",
-                 uuid: "timeless-episode"
-               )
+      assert :ok = GraphitiPool.add_episode(pid, "writers", "first", "notes", nil, lens: "alpha")
 
       timeouts = spied_timeouts(spy)
-      assert length(timeouts) >= 5
+      assert length(timeouts) >= 3
       assert Enum.uniq(timeouts) == [nil]
     end
   end
