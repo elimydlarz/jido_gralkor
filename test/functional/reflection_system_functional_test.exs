@@ -310,6 +310,23 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                {:unknown_interpolation, "later", "one"}}} =
                validate_reflections([valid_definition(chain_of_thought: cot)])
     end
+
+    test "and an interpolation is identified whatever characters it holds" do
+      cot = %{
+        steps: [
+          %{label: "one", directions: "List.", output: %{"blocked tasks" => "string"}},
+          %{label: "two", directions: "Use {{ blocked  tasks? }}.", output: %{"done" => "string"}}
+        ]
+      }
+
+      assert {:error,
+              {:invalid_chain_of_thought, "generalisation",
+               {:unknown_interpolation, "blocked  tasks?", "two"}}} =
+               validate_reflections([valid_definition(chain_of_thought: cot)])
+
+      known = put_in(cot, [:steps, Access.at(1), :directions], "Use {{ blocked tasks }}.")
+      assert :ok = validate_reflections([valid_definition(chain_of_thought: known)])
+    end
   end
 
   describe "when an agent runtime validates Reflection declarations > if a Destination output has no Destination name" do
