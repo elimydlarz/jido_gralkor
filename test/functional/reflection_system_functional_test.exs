@@ -280,6 +280,19 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     end
   end
 
+  describe "when an agent runtime validates Reflection declarations > if a Chain of Thought step declares an output name holding a brace" do
+    test "then validation fails identifying that Reflection, step, and output name" do
+      for name <- ["a{b", "cfg}", "{{facts}}"] do
+        cot = %{steps: [%{label: "think", directions: "Think.", output: %{name => "string"}}]}
+
+        assert {:error,
+                {:invalid_chain_of_thought, "generalisation",
+                 {:invalid_output_name, "think", ^name}}} =
+                 validate_reflections([valid_definition(chain_of_thought: cot)])
+      end
+    end
+  end
+
   describe "when an agent runtime validates Reflection declarations > if an output name is declared by more than one step" do
     test "then validation fails identifying that Reflection, output name, and steps" do
       cot = %{
@@ -311,7 +324,7 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                validate_reflections([valid_definition(chain_of_thought: cot)])
     end
 
-    test "and an interpolation is identified whatever characters it holds" do
+    test "and an interpolation is identified whatever characters other than braces it holds" do
       cot = %{
         steps: [
           %{label: "one", directions: "List.", output: %{"blocked tasks" => "string"}},
@@ -326,6 +339,24 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       known = put_in(cot, [:steps, Access.at(1), :directions], "Use {{ blocked tasks }}.")
       assert :ok = validate_reflections([valid_definition(chain_of_thought: known)])
+    end
+
+    test "and double braces whose text reaches another brace before closing double braces are not an interpolation" do
+      cot = %{
+        steps: [
+          %{
+            label: "one",
+            directions: "For {{Ana (ana@example.com). Use {{later}}.",
+            output: %{"first" => "string"}
+          },
+          %{label: "two", directions: "Later.", output: %{"later" => "string"}}
+        ]
+      }
+
+      assert {:error,
+              {:invalid_chain_of_thought, "generalisation",
+               {:unknown_interpolation, "later", "one"}}} =
+               validate_reflections([valid_definition(chain_of_thought: cot)])
     end
   end
 
@@ -840,6 +871,60 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
       assert {:ok, _} = Runner.run(reflection, invocation(), inference: inference)
       assert_receive {:request, %{directions: ~s(Confirm ["OPS-12"].)}}
+    end
+
+    test "and a value that is not a string is interpolated as its JSON encoding" do
+      reflection = resolve_reflection(valid_definition())
+
+      assert synthesise_directions(reflection, ["fact one", "fact two"]) ==
+               ~s(Synthesise ["fact one","fact two"])
+    end
+
+    test "and double braces inside an interpolated value are not interpolated again" do
+      cot = %{
+        steps: [
+          %{label: "gather", directions: "Gather.", output: %{"facts" => "string"}},
+          %{label: "synthesise", directions: "Use {{facts}}.", output: %{"artefact" => "string"}}
+        ]
+      }
+
+      reflection = resolve_reflection(valid_definition(chain_of_thought: cot))
+
+      assert synthesise_directions(reflection, "see {{facts}} and {{ unknown }}") ==
+               "Use see {{facts}} and {{ unknown }}."
+    end
+  end
+
+  describe "when a Chain of Thought step begins > where the directions reference outputs from earlier steps > where text put before the validated directions holds an unclosed double brace" do
+    test "then every referenced value is still interpolated" do
+      reflection =
+        valid_definition()
+        |> resolve_reflection()
+        |> prepend_directions("synthesise", "This run is for {{Ana (ana@example.com). ")
+
+      assert synthesise_directions(reflection, ["fact one"]) =~ ~s(Synthesise ["fact one"])
+    end
+
+    test "and that text reaches inference as written" do
+      reflection =
+        valid_definition()
+        |> resolve_reflection()
+        |> prepend_directions("synthesise", "This run is for {{Ana (ana@example.com). ")
+
+      assert synthesise_directions(reflection, ["fact one"]) ==
+               ~s(This run is for {{Ana (ana@example.com\). Synthesise ["fact one"])
+    end
+  end
+
+  describe "when a Chain of Thought step begins > where the directions reference outputs from earlier steps > where text added to the validated directions holds double braces naming no earlier output" do
+    test "then those braces and their text reach inference as written" do
+      reflection =
+        valid_definition()
+        |> resolve_reflection()
+        |> prepend_directions("synthesise", "Write for {{ the reader }}. ")
+
+      assert synthesise_directions(reflection, ["fact one"]) ==
+               ~s(Write for {{ the reader }}. Synthesise ["fact one"])
     end
   end
 
@@ -1790,6 +1875,38 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
 
   defp output_for(%{step: %{label: "reflect"}}),
     do: {:ok, %{output: %{"artefact" => "durable pattern"}}}
+
+  defp prepend_directions(reflection, label, text) do
+    steps =
+      Enum.map(reflection.chain_of_thought.steps, fn
+        %{label: ^label} = step -> %{step | directions: text <> step.directions}
+        step -> step
+      end)
+
+    put_in(reflection.chain_of_thought.steps, steps)
+  end
+
+  defp synthesise_directions(reflection, facts) do
+    parent = self()
+
+    inference = fn
+      %{step: %{label: "gather"}} ->
+        {:ok, %{output: %{"facts" => facts}}}
+
+      %{step: %{label: "synthesise", directions: directions}} ->
+        send(parent, {:synthesise_directions, directions})
+        {:ok, %{output: %{"artefact" => "done"}}}
+    end
+
+    assert {:ok, _} =
+             Runner.run(reflection, invocation(),
+               inference: inference,
+               artefact_id_for: fn _, _, _ -> "artefact" end
+             )
+
+    assert_receive {:synthesise_directions, directions}
+    directions
+  end
 
   defp run_and_collect_requests(reflection, invocation) do
     parent = self()

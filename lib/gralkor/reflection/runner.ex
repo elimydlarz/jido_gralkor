@@ -30,7 +30,7 @@ defmodule Gralkor.Reflection.Runner do
 
     result =
       Enum.reduce_while(reflection.chain_of_thought.steps, {:ok, %{}}, fn step, {:ok, outputs} ->
-        directions = interpolate(step.directions, outputs)
+        directions = ChainOfThought.interpolate(step.directions, outputs)
 
         request = %{
           reflection: reflection.name,
@@ -141,15 +141,6 @@ defmodule Gralkor.Reflection.Runner do
 
   defp failure(reflection, step, reason),
     do: {:error, %{reflection: reflection.name, step: step.label, reason: reason}}
-
-  defp interpolate(directions, outputs) do
-    ChainOfThought.interpolate(directions, fn name ->
-      outputs |> Map.fetch!(name) |> render_value()
-    end)
-  end
-
-  defp render_value(value) when is_binary(value), do: value
-  defp render_value(value), do: Jason.encode!(value)
 
   defp derive_artefact_id(opts, operator_id, invocation_id, reflection_name) do
     resolver = Keyword.get(opts, :artefact_id_for, &Artefact.id_for/3)

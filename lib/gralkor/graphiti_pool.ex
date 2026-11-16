@@ -595,7 +595,14 @@ defmodule Gralkor.GraphitiPool do
           )
           return {record['uuid']: record['name'] for record in records}
 
-      sourced, recorded_by_uuid, endpoint_names = await asyncio.gather(sources(), recorded(), names())
+      reads = [asyncio.ensure_future(read()) for read in (sources, recorded, names)]
+      try:
+          sourced, recorded_by_uuid, endpoint_names = await asyncio.gather(*reads)
+      except BaseException:
+          for read in reads:
+              read.cancel()
+          await asyncio.gather(*reads, return_exceptions=True)
+          raise
       if records_writers:
           for episode in list(sourced) + list(episodes):
               record = recorded_by_uuid.get(episode.uuid, {})

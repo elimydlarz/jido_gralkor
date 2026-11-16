@@ -202,6 +202,10 @@ when a memory search is run for a group
   if a query the search sends runs past its FalkorDB query timeout
     then FalkorDB stops running it
     and the search returns FalkorDB's timeout error
+  if one of the follow-up queries reading source episodes, recorded writers and extraction completion, and entity names fails
+    then the search abandons the other follow-up queries before it returns
+    and the search returns that query's error
+    and a follow-up query that times out makes the search return a timeout
   while node labels are supplied
     then the single search's filter carries those labels
     while several node labels are supplied

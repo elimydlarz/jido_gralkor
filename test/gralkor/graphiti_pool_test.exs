@@ -2692,6 +2692,45 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when a memory search is run for a group > if one of the follow-up queries reading source episodes, recorded writers and extraction completion, and entity names fails" do
+    test "then the search abandons the other follow-up queries before it returns" do
+      for failing <- ["source episodes", "recorded", "entity names"] do
+        {{:error, _}, recorded, settled} =
+          memory_search_outcome(two_writers: true, failing: failing, settle_ms: 700)
+
+        others = Enum.sort(["source episodes", "recorded", "entity names"] -- [failing])
+        assert Enum.sort(recorded["cancelled"]) == others
+        assert settled["finished"] == []
+      end
+
+      {{:error, _}, recorded, settled} =
+        memory_search_outcome(
+          two_writers: true,
+          failing: "recorded",
+          failure: "cancelled",
+          settle_ms: 700
+        )
+
+      assert Enum.sort(recorded["cancelled"]) == ["entity names", "source episodes"]
+      assert settled["finished"] == []
+    end
+
+    test "and the search returns that query's error" do
+      {outcome, _recorded, _settled} =
+        memory_search_outcome(two_writers: true, failing: "entity names")
+
+      assert {:error, {:python, message}} = outcome
+      assert message =~ "RuntimeError: entity names failed"
+    end
+
+    test "and a follow-up query that times out makes the search return a timeout" do
+      {outcome, _recorded, _settled} =
+        memory_search_outcome(two_writers: true, failing: "recorded", failure: "timeout")
+
+      assert {:error, :timeout} = outcome
+    end
+  end
+
   defp search_slowly(%{pid: pid, instance: instance}) do
     graph_query(instance, "UNWIND range(1, 400) AS i CREATE (:Slow {i: i})")
 
@@ -3380,7 +3419,7 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  defp memory_search_result(options \\ []) do
+  defp memory_search_outcome(options) do
     {g, _} =
       Pythonx.eval(
         """
@@ -3411,6 +3450,8 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.in_flight = 0
                 recorded["follow_ups"] = []
                 recorded["most_in_flight"] = 0
+                recorded["cancelled"] = []
+                recorded["finished"] = []
                 self.episodes = {
                     "episode-1": _Episode("episode-1", EpisodeType.text, "git log"),
                     "lens-episode": _Episode("lens-episode", EpisodeType.text, "notes [lens: alpha]"),
@@ -3426,9 +3467,19 @@ defmodule Gralkor.GraphitiPoolTest do
 
             async def follow_up(self, read):
                 self.recorded["follow_ups"].append(read)
+                if failing is not None and read == failing.decode():
+                    await asyncio.sleep(0.01)
+                    if failure == b"cancelled":
+                        raise asyncio.CancelledError()
+                    raise TimeoutError() if failure == b"timeout" else RuntimeError(f"{read} failed")
                 self.in_flight += 1
                 self.recorded["most_in_flight"] = max(self.recorded["most_in_flight"], self.in_flight)
-                await asyncio.sleep(0.05)
+                try:
+                    await asyncio.sleep(0.5 if failing else 0.05)
+                except asyncio.CancelledError:
+                    self.recorded["cancelled"].append(read)
+                    raise
+                self.recorded["finished"].append(read)
                 self.in_flight -= 1
 
             async def execute_query(self, query, **params):
@@ -3523,7 +3574,9 @@ defmodule Gralkor.GraphitiPoolTest do
           "with_edges" => Keyword.get(options, :edges, true),
           "with_nodes" => Keyword.get(options, :nodes, true),
           "with_reflections" => Keyword.get(options, :reflections, false),
-          "two_writers" => Keyword.get(options, :two_writers, false)
+          "two_writers" => Keyword.get(options, :two_writers, false),
+          "failing" => Keyword.get(options, :failing),
+          "failure" => Keyword.get(options, :failure, "runtime")
         }
       )
 
@@ -3539,19 +3592,32 @@ defmodule Gralkor.GraphitiPoolTest do
         install_loop_fn: &Gralkor.Python.install_async_runtime/0
       )
 
-    assert {:ok, results} =
-             GraphitiPool.search_memory(
-               pid,
-               "group-with-hyphens",
-               Keyword.get(options, :query, "what changed parse"),
-               Keyword.get(options, :limits, %{facts: 7, nodes: 7, episodes: 7}),
-               Keyword.get(options, :opts, [])
-             )
+    outcome =
+      GraphitiPool.search_memory(
+        pid,
+        "group-with-hyphens",
+        Keyword.get(options, :query, "what changed parse"),
+        Keyword.get(options, :limits, %{facts: 7, nodes: 7, episodes: 7}),
+        Keyword.get(options, :opts, [])
+      )
 
-    {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+    recorded = recorded(g)
+    Process.sleep(Keyword.get(options, :settle_ms, 0))
+    settled = recorded(g)
     GenServer.stop(pid)
 
-    {results, Pythonx.decode(recorded)}
+    {outcome, recorded, settled}
+  end
+
+  defp recorded(g) do
+    {recorded, _} = Pythonx.eval("g.recorded", %{"g" => g})
+    Pythonx.decode(recorded)
+  end
+
+  defp memory_search_result(options \\ []) do
+    {outcome, recorded, _settled} = memory_search_outcome(options)
+    assert {:ok, results} = outcome
+    {results, recorded}
   end
 
   describe "when a graph instance is requested for a group" do

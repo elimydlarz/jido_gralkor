@@ -43,12 +43,16 @@ when an agent runtime validates Reflection declarations
   if a Chain of Thought step declares an unsupported structured-output type
     then validation fails identifying that Reflection, step, and type
 
+  if a Chain of Thought step declares an output name holding a brace
+    then validation fails identifying that Reflection, step, and output name
+
   if an output name is declared by more than one step
     then validation fails identifying that Reflection, output name, and steps
 
   if an interpolation references an output not declared by an earlier step
     then validation fails identifying that Reflection, step, and interpolation
-    and an interpolation is identified whatever characters it holds
+    and an interpolation is identified whatever characters other than braces it holds
+    and double braces whose text reaches another brace before closing double braces are not an interpolation
 
   if a Reflection's `outputs` value is not a list
     then validation fails identifying that Reflection and outputs value
@@ -131,6 +135,13 @@ when a Chain of Thought step begins
   where the directions reference outputs from earlier steps
     then every referenced value is interpolated from the Chain of Thought's shared output space
     and an output whose name holds a space is interpolated too
+    and a value that is not a string is interpolated as its JSON encoding
+    and double braces inside an interpolated value are not interpolated again
+    where text put before the validated directions holds an unclosed double brace
+      then every referenced value is still interpolated
+      and that text reaches inference as written
+    where text added to the validated directions holds double braces naming no earlier output
+      then those braces and their text reach inference as written
 
   where inference directs a tool call
     then the requested tool is called with the model-produced arguments

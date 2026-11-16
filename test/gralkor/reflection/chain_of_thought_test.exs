@@ -102,6 +102,15 @@ defmodule Gralkor.Reflection.ChainOfThoughtTest do
     end
   end
 
+  describe "if a structured-output declaration has an output name holding a brace" do
+    test "then parsing identifies that step and invalid declaration" do
+      for name <- ["a{b", "cfg}", "{{facts}}", "{"] do
+        assert {:error, {:invalid_output_name, "review", ^name}} =
+                 ChainOfThought.from_config(%{steps: [step("review", %{name => "string"})]})
+      end
+    end
+  end
+
   describe "if any type within a structured-output declaration is unsupported" do
     test "then parsing identifies that step and type" do
       for {declaration, unsupported} <- [
@@ -152,7 +161,7 @@ defmodule Gralkor.Reflection.ChainOfThoughtTest do
                ChainOfThought.from_config(%{steps: [forward, later]})
     end
 
-    test "and an interpolation is identified whatever characters it holds" do
+    test "and an interpolation is identified whatever characters other than braces it holds" do
       first = step("first", %{"blocked tasks" => "string"})
 
       for name <- ["blocked tasks", "blocked.tasks", "blöcked/tasks?", ""] do
@@ -223,10 +232,60 @@ defmodule Gralkor.Reflection.ChainOfThoughtTest do
       assert ChainOfThought.interpolations("Review evidence.") == []
     end
 
-    test "and each name is the text between the double braces without its surrounding spaces, whatever characters it holds" do
+    test "and each name is the text between the double braces without its surrounding spaces, whatever characters other than braces it holds" do
       assert ChainOfThought.interpolations(
                "{{ blocked tasks }} and {{confirmed.blocked/tasks}} then {{ }} and {{\n recommended actions? \n}}"
              ) == ["blocked tasks", "confirmed.blocked/tasks", "", "recommended actions?"]
+    end
+
+    test "and double braces whose text reaches another brace before closing double braces hold no interpolation" do
+      assert ChainOfThought.interpolations(
+               "For {{Ana (ana@example.com).\nUse {{search_results}} and {a} {{ b }c}} {{{x}}}"
+             ) == ["search_results", "x"]
+    end
+  end
+
+  describe "when directions are filled in from a shared output space" do
+    test "then each interpolation naming an output in the space is replaced by that output's value" do
+      assert ChainOfThought.interpolate("Use {{ blocked tasks }} and {{owner}}.", %{
+               "blocked tasks" => "OPS-12",
+               "owner" => "Ana"
+             }) == "Use OPS-12 and Ana."
+    end
+
+    test "and a string value is inserted as it is" do
+      assert ChainOfThought.interpolate("Use {{note}}.", %{"note" => ~s("quoted" text)}) ==
+               ~s(Use "quoted" text.)
+    end
+
+    test "and any other value is inserted as its JSON encoding" do
+      assert ChainOfThought.interpolate("{{list}} {{flag}} {{count}} {{record}}", %{
+               "list" => ["a", 1],
+               "flag" => true,
+               "count" => 3,
+               "record" => %{"level" => 2}
+             }) == ~s(["a",1] true 3 {"level":2})
+    end
+
+    test "and double braces inside an inserted value are not filled in again" do
+      assert ChainOfThought.interpolate("Use {{note}}.", %{
+               "note" => "see {{other}} and {{note}}",
+               "other" => "never"
+             }) == "Use see {{other}} and {{note}}."
+    end
+
+    test "and double braces whose text reaches another brace before closing double braces are left as written" do
+      assert ChainOfThought.interpolate("For {{Ana (ana@example.com). Use {{facts}}.", %{
+               "facts" => "fact one"
+             }) == "For {{Ana (ana@example.com). Use fact one."
+    end
+  end
+
+  describe "when directions are filled in from a shared output space > if an interpolation names no output in the space" do
+    test "then that interpolation is left as written" do
+      assert ChainOfThought.interpolate("Write for {{ the reader }} from {{facts}}.", %{
+               "facts" => "fact one"
+             }) == "Write for {{ the reader }} from fact one."
     end
   end
 

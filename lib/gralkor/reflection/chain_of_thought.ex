@@ -77,7 +77,7 @@ defmodule Gralkor.Reflection.ChainOfThought do
 
     invalid_output =
       Enum.find_value(output, fn {name, type} ->
-        if non_blank?(name) do
+        if non_blank?(name) and not String.contains?(name, ["{", "}"]) do
           case parse_type(type) do
             {:ok, _parsed} -> nil
             {:error, unsupported} -> {:invalid_output_type, unsupported}
@@ -104,7 +104,7 @@ defmodule Gralkor.Reflection.ChainOfThought do
     end
   end
 
-  @placeholder ~r/\{\{(.*?)\}\}/s
+  @placeholder ~r/\{\{([^{}]*)\}\}/
 
   def interpolations(directions) do
     @placeholder
@@ -112,9 +112,17 @@ defmodule Gralkor.Reflection.ChainOfThought do
     |> Enum.map(fn [name] -> String.trim(name) end)
   end
 
-  def interpolate(directions, value_of) do
-    Regex.replace(@placeholder, directions, fn _, name -> value_of.(String.trim(name)) end)
+  def interpolate(directions, outputs) do
+    Regex.replace(@placeholder, directions, fn placeholder, name ->
+      case Map.fetch(outputs, String.trim(name)) do
+        {:ok, value} -> render(value)
+        :error -> placeholder
+      end
+    end)
   end
+
+  defp render(value) when is_binary(value), do: value
+  defp render(value), do: Jason.encode!(value)
 
   def matches_type?(value, declaration) do
     case parse_type(declaration) do
