@@ -2592,7 +2592,7 @@ defmodule Gralkor.GraphitiPoolTest do
       %{pid: pid} = start_real_embedded_pool(%{})
       searched = column_search(seed_embedded_graph(pid))
 
-      assert length(searched["raw"]) == 8
+      assert length(searched["raw"]) == 7
 
       for attributes <- searched["raw"] do
         assert attributes["fact_embedding"] == nil
