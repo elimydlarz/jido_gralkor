@@ -2587,6 +2587,188 @@ defmodule Gralkor.GraphitiPoolTest do
       assert results.nodes == []
       assert [%{content: "commit 1 touched parse"} | _] = results.episodes
     end
+
+    test "and the fact and entity queries bring back no embedding from FalkorDB" do
+      %{pid: pid} = start_real_embedded_pool(%{})
+      searched = column_search(seed_embedded_graph(pid))
+
+      assert length(searched["raw"]) == 8
+
+      for attributes <- searched["raw"] do
+        assert attributes["fact_embedding"] == nil
+        assert attributes["name_embedding"] == nil
+      end
+
+      assert searched["own_raw"] |> Enum.map(&Map.keys/1) |> List.flatten() |> Enum.any?(&(&1 =~ "_embedding"))
+    end
+
+    test "and each fact and entity still carries every other stored property among its attributes" do
+      %{pid: pid} = start_real_embedded_pool(%{})
+      searched = column_search(seed_embedded_graph(pid))
+
+      assert searched["edges"] ==
+               List.duplicate(%{"severity" => "high", "_gralkor_writers" => ["lens:alpha"]}, 3)
+
+      assert searched["nodes"] ==
+               List.duplicate(%{"team" => "payments", "_gralkor_writers" => ["lens:alpha"]}, 2)
+
+      assert searched["edges"] == searched["own_edges"]
+      assert searched["nodes"] == searched["own_nodes"]
+    end
+
+    test "and after the graph library's search, the facts' source episodes, the writers and extraction completion recorded on those and the returned episodes, and the facts' entity names are read by three queries sent together" do
+      {results, recorded} = memory_search_result(two_writers: true, reflections: true)
+
+      assert Enum.sort(recorded["follow_ups"]) == ["entity names", "recorded", "source episodes"]
+      assert recorded["most_in_flight"] == 3
+      assert [%{sources: [_, _]} | _] = results.facts
+    end
+
+    test "and every query the search sends carries a FalkorDB query timeout below the socket timeout" do
+      %{pid: pid} = start_real_searching_pool(%{})
+      spy = spy_query_timeouts()
+
+      assert {:ok, %{facts: [_], nodes: [_ | _], episodes: [_]}} =
+               GraphitiPool.search_memory(pid, "searching", "amber", %{
+                 facts: 5,
+                 nodes: 5,
+                 episodes: 5
+               })
+
+      timeouts = spied_timeouts(spy)
+      assert length(timeouts) >= 6
+      assert Enum.uniq(timeouts) == [3_600]
+    end
+  end
+
+  describe "when a memory search is run for a group > if a query the search sends runs past that query timeout" do
+    setup [:start_real_searching_pool, :search_slowly]
+
+    test "then FalkorDB stops running it", %{pid: pid, outcome: outcome} do
+      assert {:error, _} = outcome
+
+      [info] =
+        Gralkor.Python.run_coroutine(
+          "database.connection.execute_command('GRAPH.INFO')",
+          %{"database" => :sys.get_state(pid).falkor_db}
+        )
+        |> Pythonx.decode()
+        |> then(&[&1])
+
+      assert ["# Running queries", [], "# Waiting queries", [] | _] = info
+    end
+
+    test "and the search returns FalkorDB's timeout error", %{outcome: outcome, elapsed: elapsed} do
+      assert {:error, {:python, message}} = outcome
+      assert message =~ "Query timed out"
+      assert elapsed >= 3_600
+      assert elapsed < 4_000
+    end
+  end
+
+  defp search_slowly(%{pid: pid, instance: instance}) do
+    graph_query(instance, "UNWIND range(1, 400) AS i CREATE (:Slow {i: i})")
+
+    Pythonx.eval(
+      "g.slow = 'MATCH (a:Slow), (b:Slow), (c:Slow), (d:Slow) RETURN count(*)'\nNone",
+      %{"g" => instance}
+    )
+
+    started = System.monotonic_time(:millisecond)
+
+    outcome =
+      GraphitiPool.search_memory(pid, "searching", "amber", %{facts: 5, nodes: 5, episodes: 5})
+
+    %{outcome: outcome, elapsed: System.monotonic_time(:millisecond) - started}
+  end
+
+  # One group's graph holding entities and facts with embeddings and one stored
+  # property of their own each.
+  defp seed_embedded_graph(pid) do
+    instance = GraphitiPool.for(pid, "columns")
+
+    graph_query(instance, """
+    CREATE (ep:Episodic {uuid: 'amber-ep', name: 'amber', group_id: 'g', source: 'text', source_description: 'notes', content: 'amber', entity_edges: [], created_at: '2026-06-01T00:00:00+00:00', valid_at: '2026-06-01T00:00:00+00:00', _gralkor_writers: ['lens:alpha']}),
+           (a:Entity {uuid: 'a', name: 'amber a', group_id: 'g', summary: 'amber', created_at: '2026-06-01T00:00:00+00:00', team: 'payments', _gralkor_writers: ['lens:alpha']}),
+           (b:Entity {uuid: 'b', name: 'amber b', group_id: 'g', summary: 'amber', created_at: '2026-06-01T00:00:00+00:00', team: 'payments', _gralkor_writers: ['lens:alpha']}),
+           (a)-[:RELATES_TO {uuid: 'ab', name: 'OWNS', fact: 'amber a owns b', group_id: 'g', episodes: ['amber-ep'], created_at: '2026-06-01T00:00:00+00:00', severity: 'high', _gralkor_writers: ['lens:alpha']}]->(b)
+    """)
+
+    graph_query(
+      instance,
+      "MATCH (n:Entity) SET n.name_embedding = vecf32([1.0, 0.0, 0.0]) WITH count(n) AS done MATCH ()-[e:RELATES_TO]->() SET e.fact_embedding = vecf32([1.0, 0.0, 0.0])"
+    )
+
+    instance
+  end
+
+  # Runs the graph library's fact and entity searches, as the started pool
+  # wraps them, and the same searches with the graph library's own result
+  # columns, recording the attributes FalkorDB sent back for every row.
+  defp column_search(instance) do
+    """
+    import copy
+    import graphiti_core.search.search as search_module
+    import graphiti_core.search.search_utils as search_utils
+    from graphiti_core.search.search_filters import SearchFilters
+    from graphiti_core.driver.driver import GraphProvider
+
+    driver = g.driver
+    since = search_utils._gralkor_search_filters(since='2026-01-01T00:00:00Z')
+
+    async def searched():
+        raw = []
+        original = driver.execute_query
+        async def recording(cypher, **params):
+            result = await original(cypher, **params)
+            raw.extend(copy.deepcopy(record['attributes']) for record in result[0] if 'attributes' in record)
+            return result
+        driver.execute_query = recording
+        try:
+            edges = (
+                await search_utils.edge_fulltext_search(driver, 'amber', SearchFilters(), None, 10)
+                + await search_module.edge_similarity_search(driver, [1.0, 0.0, 0.0], None, None, SearchFilters(), None, 10, 0.5)
+                + await search_module.edge_similarity_search(driver, [1.0, 0.0, 0.0], None, None, since, None, 10, 0.5)
+            )
+            nodes = (
+                await search_utils.node_fulltext_search(driver, 'amber', SearchFilters(), None, 10)
+                + await search_utils.node_similarity_search(driver, [1.0, 0.0, 0.0], SearchFilters(), None, 10, 0.5)
+            )
+        finally:
+            del driver.execute_query
+        return raw, edges, nodes
+
+    async def own():
+        own_raw = []
+        records, _, _ = await driver.execute_query(
+            'MATCH (n:Entity)-[e:RELATES_TO]->(m:Entity) RETURN '
+            + search_utils.get_entity_edge_return_query._gralkor_original(GraphProvider.FALKORDB)
+        )
+        own_raw.extend(copy.deepcopy(record['attributes']) for record in records)
+        own_edges = [search_utils.get_entity_edge_from_record(record, GraphProvider.FALKORDB) for record in records]
+        records, _, _ = await driver.execute_query(
+            'MATCH (n:Entity) RETURN ' + search_utils.get_entity_node_return_query._gralkor_original(GraphProvider.FALKORDB)
+        )
+        own_raw.extend(copy.deepcopy(record['attributes']) for record in records)
+        own_nodes = [search_utils.get_entity_node_from_record(record, GraphProvider.FALKORDB) for record in records]
+        return own_raw, own_edges, own_nodes
+
+    async def run():
+        raw, edges, nodes = await searched()
+        own_raw, own_edges, own_nodes = await own()
+        return {
+            'raw': raw,
+            'own_raw': own_raw,
+            'edges': [edge.attributes for edge in edges],
+            'nodes': [node.attributes for node in nodes],
+            'own_edges': [edge.attributes for edge in own_edges] * 3,
+            'own_nodes': [node.attributes for node in own_nodes],
+        }
+
+    run()
+    """
+    |> Gralkor.Python.run_coroutine(%{"g" => instance})
+    |> Pythonx.decode()
   end
 
   describe "when a memory search is run for a group > while node labels are supplied" do
