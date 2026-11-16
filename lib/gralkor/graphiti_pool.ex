@@ -730,10 +730,9 @@ defmodule Gralkor.GraphitiPool do
     raw =
       Gralkor.Python.run_coroutine(
         """
-        from graphiti_core.nodes import EpisodicNode
         from graphiti_core.search.search_filters import SearchFilters
+        import graphiti_core.search.search_utils as search_utils
 
-        #{@episode_writer_hydration}
         #{@fact_rendering}
         q = query.decode('utf-8') if isinstance(query, (bytes, bytearray)) else query
         types = (
@@ -741,10 +740,11 @@ defmodule Gralkor.GraphitiPool do
           if edge_types else None
         )
         async def search_with_sources():
+          search_utils._gralkor_read_timeout.set(read_timeout_ms)
           filters = SearchFilters(edge_types=types)
           edges = await g.search(q, num_results=max_results, search_filter=filters)
-
-          return await render_facts(g, edges)
+          episodes, _recorded, endpoint_names = await read_follow_up(getattr(g, 'driver', None), edges)
+          return render_facts(edges, episodes, endpoint_names)
 
         search_with_sources()
         """,
@@ -752,7 +752,8 @@ defmodule Gralkor.GraphitiPool do
           "g" => instance,
           "query" => query,
           "max_results" => max_results,
-          "edge_types" => edge_types
+          "edge_types" => edge_types,
+          "read_timeout_ms" => read_timeout_ms(server)
         }
       )
 
