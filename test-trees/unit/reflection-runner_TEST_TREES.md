@@ -22,6 +22,7 @@ when the Reflection Runner receives a valid Reflection and invocation
 
 where a step's directions reference earlier outputs
   then those values are interpolated from the shared output space
+  and an output whose name holds spaces or punctuation is interpolated too
 
 where inference returns wrapped tool calls
   then each call is executed with its model-produced arguments and the current tool context
