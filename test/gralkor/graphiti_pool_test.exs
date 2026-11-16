@@ -3273,8 +3273,11 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.source_description = source_description
                 self.content = content
 
+        import asyncio
+
         class _GraphOperations:
             async def episodic_node_get_by_uuids(self, cls, driver, uuids):
+                await driver.follow_up("source episodes")
                 return [driver.episodes[uuid] for uuid in uuids]
 
         class _EntityDriver:
@@ -3283,6 +3286,9 @@ defmodule Gralkor.GraphitiPoolTest do
             def __init__(self, recorded):
                 self.graph_operations_interface = _GraphOperations()
                 self.recorded = recorded
+                self.in_flight = 0
+                recorded["follow_ups"] = []
+                recorded["most_in_flight"] = 0
                 self.episodes = {
                     "episode-1": _Episode("episode-1", EpisodeType.text, "git log"),
                     "lens-episode": _Episode("lens-episode", EpisodeType.text, "notes [lens: alpha]"),
