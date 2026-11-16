@@ -346,30 +346,28 @@ defmodule Gralkor.GraphitiPool do
       def edge_constructor(original):
           return filter_constructor(original, 'e')
 
+      def falkordb_only(driver):
+          if driver.search_interface or driver.provider != GraphProvider.FALKORDB:
+              raise RuntimeError(
+                  f'Gralkor writer and creation-time search filters support only FalkorDB, not {driver.provider}'
+              )
+
       def episode_search(original):
           async def episode_fulltext_search(driver, query, _search_filter, group_ids=None, limit=search_utils.RELEVANT_SCHEMA_LIMIT):
               clauses, params = writer_clauses('e', _search_filter)
               if not clauses:
                   return await original(driver, query, _search_filter, group_ids, limit)
-              if driver.search_interface or driver.provider != GraphProvider.FALKORDB:
-                  raise RuntimeError(
-                      f'Gralkor writer and creation-time search filters support only FalkorDB, not {driver.provider}'
-                  )
+              falkordb_only(driver)
               fuzzy_query = fulltext_query(query, group_ids, driver)
               if fuzzy_query == '':
                   return []
-              writer_filter = "".join(f" AND {clause}" for clause in clauses)
-              group_filter = ''
               if group_ids is not None:
-                  group_filter = '\\nAND e.group_id IN $group_ids'
+                  clauses.append('e.group_id IN $group_ids')
                   params['group_ids'] = group_ids
               cypher = (
                   get_nodes_query('episode_content', '$query', limit=limit, provider=driver.provider)
-                  + '\\nYIELD node AS episode, score'
-                  + '\\nMATCH (e:Episodic)'
-                  + '\\nWHERE e.uuid = episode.uuid'
-                  + writer_filter
-                  + group_filter
+                  + '\\nYIELD node AS e, score'
+                  + '\\nWHERE ' + ' AND '.join(clauses)
                   + '\\nRETURN\\n'
                   + episode_return
                   + '\\nORDER BY score DESC\\nLIMIT $limit'
@@ -385,13 +383,87 @@ defmodule Gralkor.GraphitiPool do
           episode_fulltext_search._gralkor_original = original
           return episode_fulltext_search
 
-      wrap = {'node': node_constructor, 'edge': edge_constructor, 'episode': episode_search}
-      wrapped = [(module, name, wrap[kind](function)) for module, name, function, kind in originals]
-      for module, name, function in wrapped:
-          setattr(module, name, function)
+      def similarity_search(original):
+          async def edge_similarity_search(
+              driver, search_vector, source_node_uuid, target_node_uuid, search_filter,
+              group_ids=None, limit=search_utils.RELEVANT_SCHEMA_LIMIT, min_score=search_utils.DEFAULT_MIN_SCORE,
+          ):
+              if getattr(search_filter, 'since', None) is None:
+                  return await original(
+                      driver, search_vector, source_node_uuid, target_node_uuid, search_filter,
+                      group_ids, limit, min_score,
+                  )
+              falkordb_only(driver)
+              fact_clauses, params = writer_clauses('e', search_filter)
+              own_queries, own_params = own_edge_constructor(search_filter, driver.provider)
+              entity_clauses = ['n:Entity', 'm:Entity'] + label_disjunction(list(own_queries), search_filter, driver.provider)
+              params.update(own_params)
+              if group_ids is not None:
+                  fact_clauses.append('e.group_id IN $group_ids')
+                  params['group_ids'] = group_ids
+                  if source_node_uuid is not None:
+                      entity_clauses.append('n.uuid = $source_uuid')
+                      params['source_uuid'] = source_node_uuid
+                  if target_node_uuid is not None:
+                      entity_clauses.append('m.uuid = $target_uuid')
+                      params['target_uuid'] = target_node_uuid
+              cypher = (
+                  'MATCH ()-[e:RELATES_TO]->()'
+                  + '\\nWHERE ' + ' AND '.join(fact_clauses)
+                  + '\\nWITH e, startNode(e) AS n, endNode(e) AS m'
+                  + '\\nWHERE ' + ' AND '.join(entity_clauses)
+                  + '\\nWITH DISTINCT e, n, m, '
+                  + get_vector_cosine_func_query('e.fact_embedding', '$search_vector', driver.provider)
+                  + ' AS score'
+                  + '\\nWHERE score > $min_score'
+                  + '\\nRETURN\\n'
+                  + search_utils.get_entity_edge_return_query(driver.provider)
+                  + '\\nORDER BY score DESC\\nLIMIT $limit'
+              )
+              records, _, _ = await driver.execute_query(
+                  cypher,
+                  search_vector=search_vector,
+                  limit=limit,
+                  min_score=min_score,
+                  routing_='r',
+                  **params,
+              )
+              return [get_entity_edge_from_record(record, driver.provider) for record in records]
+          edge_similarity_search._gralkor_original = original
+          return edge_similarity_search
+
+      def columns(kind):
+          replaced, replacement = column_replacements[kind]
+          def wrap_columns(original):
+              def return_columns(provider):
+                  query = original(provider)
+                  return query.replace(replaced, replacement) if provider == GraphProvider.FALKORDB else query
+              return_columns._gralkor_original = original
+              return return_columns
+          return wrap_columns
+
+      def timed_query(original):
+          async def query(self, q, params=None, timeout=None):
+              return await original(self, q, params, read_timeout.get() if timeout is None else timeout)
+          query._gralkor_original = original
+          return query
+
+      wrap = {
+          'node': node_constructor,
+          'edge': edge_constructor,
+          'episode': episode_search,
+          'similarity': similarity_search,
+          'edge_columns': columns('edge_columns'),
+          'node_columns': columns('node_columns'),
+          'query': timed_query,
+      }
+      wrapped = [(owner, name, wrap[kind](function)) for owner, name, function, kind in originals]
+      for owner, name, function in wrapped:
+          setattr(owner, name, function)
       search_utils._gralkor_search_filter_originals = [
-          (module, name, function) for module, name, function, _kind in originals
+          (owner, name, function) for owner, name, function, _kind in originals
       ]
+      search_utils._gralkor_read_timeout = read_timeout
       search_utils._gralkor_search_filters = WriterSearchFilters
       return WriterSearchFilters
   """
