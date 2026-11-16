@@ -5535,6 +5535,9 @@ defmodule Gralkor.GraphitiPoolTest do
                        self.driver = FalkorDriver(falkor_db=falkor_db, database=group_id)
                        self.slow = None
 
+                   async def build_indices_and_constraints(self):
+                       await self.driver.build_indices_and_constraints()
+
                    async def search_(self, query, config=None, group_ids=None, search_filter=None):
                        edges = await search_utils.edge_fulltext_search(self.driver, query, search_filter, None, config.limit)
                        nodes = await search_utils.node_fulltext_search(self.driver, query, search_filter, None, config.limit)
