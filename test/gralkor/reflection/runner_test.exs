@@ -431,6 +431,40 @@ defmodule Gralkor.Reflection.RunnerTest do
                         }
                       }}
     end
+
+    test "and an output whose name holds spaces or punctuation is interpolated too" do
+      test_pid = self()
+
+      inference = fn
+        %{step: %{label: "collect"}} = request ->
+          send(test_pid, {:inference_request, request})
+          {:ok, %{output: %{"blocked tasks" => "OPS-12", "next.step/owner?" => ["Ana"]}}}
+
+        %{step: %{label: "decide"}} = request ->
+          send(test_pid, {:inference_request, request})
+          {:ok, %{output: %{"answer" => "ship"}}}
+      end
+
+      steps = [
+        step("collect", "Collect.", %{
+          "blocked tasks" => "string",
+          "next.step/owner?" => "Array<string>"
+        }),
+        step("decide", "Unblock {{ blocked tasks }} with {{next.step/owner?}}.", %{
+          "answer" => "string"
+        })
+      ]
+
+      assert {:ok, %Artefact{}} =
+               Runner.run(reflection(steps), invocation(),
+                 inference: inference,
+                 type_matcher: fn _value, _type -> true end,
+                 artefact_id_for: fn _, _, _ -> "artefact" end
+               )
+
+      assert_receive {:inference_request,
+                      %{step: %{label: "decide", directions: ~s(Unblock OPS-12 with ["Ana"].)}}}
+    end
   end
 
   describe "where inference returns wrapped tool calls" do
