@@ -813,7 +813,11 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     test "and an output whose name holds a space is interpolated too" do
       cot = %{
         steps: [
-          %{label: "gather", directions: "Gather.", output: %{"blocked tasks" => "Array<string>"}},
+          %{
+            label: "gather",
+            directions: "Gather.",
+            output: %{"blocked tasks" => "Array<string>"}
+          },
           %{
             label: "synthesise",
             directions: "Confirm {{ blocked tasks }}.",

@@ -162,7 +162,10 @@ defmodule Gralkor.Reflection.ChainOfThoughtTest do
                  ChainOfThought.from_config(%{steps: [referencing]})
       end
 
-      unknown = %{step("second", %{"done" => "boolean"}) | directions: "Use {{ blocked  tasks }}."}
+      unknown = %{
+        step("second", %{"done" => "boolean"})
+        | directions: "Use {{ blocked  tasks }}."
+      }
 
       assert {:error, {:unknown_interpolation, "blocked  tasks", "second"}} =
                ChainOfThought.from_config(%{steps: [first, unknown]})

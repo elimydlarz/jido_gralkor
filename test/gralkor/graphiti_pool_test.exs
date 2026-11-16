@@ -2623,7 +2623,10 @@ defmodule Gralkor.GraphitiPoolTest do
         assert attributes["name_embedding"] == nil
       end
 
-      assert searched["own_raw"] |> Enum.map(&Map.keys/1) |> List.flatten() |> Enum.any?(&(&1 =~ "_embedding"))
+      assert searched["own_raw"]
+             |> Enum.map(&Map.keys/1)
+             |> List.flatten()
+             |> Enum.any?(&(&1 =~ "_embedding"))
     end
 
     test "and each fact and entity still carries every other stored property among its attributes" do
