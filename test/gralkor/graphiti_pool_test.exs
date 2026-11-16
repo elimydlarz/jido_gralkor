@@ -74,6 +74,24 @@ defmodule Gralkor.GraphitiPoolTest do
     Pythonx.decode(functions)
   end
 
+  defp graph_client_query do
+    {wrapped, _} =
+      Pythonx.eval(
+        """
+        import graphiti_core.search.search_utils as search_utils
+        from falkordb.asyncio.graph import AsyncGraph
+        {
+            'id': id(AsyncGraph.query),
+            'wrapped': hasattr(AsyncGraph.query, '_gralkor_original'),
+            'read_timeout': getattr(search_utils, '_gralkor_read_timeout', None) is not None,
+        }
+        """,
+        %{}
+      )
+
+    Pythonx.decode(wrapped)
+  end
+
   # Puts graphiti's own functions back, as before any pool started, and
   # restores whatever was installed when the test exits.
   defp unwrap_search_filters do
