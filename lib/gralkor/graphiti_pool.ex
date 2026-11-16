@@ -2829,7 +2829,6 @@ defmodule Gralkor.GraphitiPool do
             socket_timeout=socket_timeout,
             socket_connect_timeout=socket_timeout,
             max_connections=max_connections,
-            retry=Retry(NoBackoff(), 0),
         )
 
         # FalkorDB(...) probes the server through a separate synchronous
