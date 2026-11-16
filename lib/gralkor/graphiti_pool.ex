@@ -2839,7 +2839,7 @@ defmodule Gralkor.GraphitiPool do
             connection_class=built.connection_class,
             max_connections=max_connections,
             timeout=socket_timeout,
-            **built.connection_kwargs,
+            **{**built.connection_kwargs, 'retry': Retry(NoBackoff(), 0)},
         )
         database
         """,
