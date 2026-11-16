@@ -230,6 +230,9 @@ when a memory search is run for a group
     and the single search's filter admits only episodes created at or after that time
     and every admission is applied inside its query, before its limit
     and any included or excluded writers are applied in the same queries
+    and the fact similarity query returns the facts, in the same order, that the graph library's own query returns under the same restrictions
+    and the fact similarity query finds its facts through the creation-time index before it reads any entity
+    and the episode full-text query restricts the episodes the full-text index yields without looking each one up again
   when the query exceeds the graph library's full-text limit
     then the graph library receives a bounded non-empty query containing the earliest supported terms
   when a returned Reflection episode lacks its durable extraction-completion marker
