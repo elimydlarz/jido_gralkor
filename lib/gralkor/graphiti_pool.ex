@@ -911,6 +911,7 @@ defmodule Gralkor.GraphitiPool do
           return result
 
         async def search_memory():
+          search_utils._gralkor_read_timeout.set(read_timeout_ms)
           if included_writers or rejected_writers or earliest is not None:
             search_filter = WriterSearchFilters(
               node_labels=labels,
