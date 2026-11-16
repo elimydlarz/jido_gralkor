@@ -48,6 +48,9 @@ defmodule Gralkor.GraphitiPoolTest do
       (falkor_search_ops, 'node_search_filter_query_constructor'),
       (falkor_search_ops, 'edge_search_filter_query_constructor'),
       (search_module, 'episode_fulltext_search'),
+      (search_module, 'edge_similarity_search'),
+      (search_utils, 'get_entity_edge_return_query'),
+      (search_utils, 'get_entity_node_return_query'),
   ]
   """
 
