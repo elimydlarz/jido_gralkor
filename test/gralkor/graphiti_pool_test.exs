@@ -2298,11 +2298,8 @@ defmodule Gralkor.GraphitiPoolTest do
   describe "when a graph instance's indexes are built on FalkorDB > while both vector indexes already exist, built or still being built" do
     setup :start_real_embedded_pool
 
-    test "then neither is created again", %{pid: pid} do
-      GraphitiPool.for(pid, "fresh")
-      sent = recorded_build(pid, "fresh")
-
-      refute Enum.any?(sent, &(&1 =~ "CREATE VECTOR INDEX"))
+    test "then neither is created again", context do
+      assert_no_vector_index_created_again(context)
     end
 
     test "and nothing is logged about them", %{pid: pid} do
@@ -2331,6 +2328,15 @@ defmodule Gralkor.GraphitiPoolTest do
     test "and index building fails, naming the graph, the index, its dimension and similarity, the embedder's dimension, and how to replace it",
          context do
       assert_index_building_fails_naming_graph_index_dimension_similarity(context)
+    end
+
+    test "and any stopword replacement and writer recording done before it are still logged",
+         context do
+      assert_replacement_and_recording_logged_beside_mismatch(context)
+    end
+
+    test "and every other graph's indexes are still built", context do
+      assert_other_graphs_built_beside_mismatch(context)
     end
   end
 
@@ -3594,8 +3600,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > where at least as many results pass as the search keeps" do
-    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > where at least as many results pass as the search keeps > while the vector index gave fewer candidates than it was asked for, or the last result kept is within the nearest share of the candidates it gave" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph, :seed_deep_vector_graph]
 
     test "then no stored embedding is compared with the search's outside the vector index",
          context do
@@ -3607,13 +3613,26 @@ defmodule Gralkor.GraphitiPoolTest do
       assert_search_returns_as_many_results_as_graph_librarys_own_query_r(context)
     end
 
-    test "and every result scores at least as high as the lowest-scoring result of the graph library's own query",
+    test "and every result scores at least as high as the lowest-scoring result of the graph library's own query, as long as the vector index gives the truly nearest candidates",
          context do
       assert_every_result_scores_at_least_as_high_as_lowestscoring_result(context)
     end
   end
 
-  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > where fewer results pass than the search keeps > while the vector index gave every candidate it was asked for, the farthest of them scores at or below the search's minimum, and at least one result passed" do
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > where at least as many results pass as the search keeps > while the vector index gave every candidate it was asked for and the last result kept lies beyond the nearest share of them" do
+    setup [:start_real_embedded_pool, :seed_deep_vector_graph]
+
+    test "then the search answers with the graph library's own query under the same restrictions",
+         context do
+      assert_deep_beyond_share_sends_own_query(context)
+    end
+
+    test "and returns what that query returns", context do
+      assert_deep_beyond_share_returns_own_results(context)
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > where fewer results pass than the search keeps > while the vector index gave every candidate it was asked for, every candidate scoring above the search's minimum is within the nearest share of them, and at least one result passed" do
     setup [:start_real_embedded_pool, :seed_crowded_vector_graph]
 
     test "then the results that passed are returned", context do
@@ -3625,8 +3644,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > where fewer results pass than the search keeps > while the farthest candidate scores above the search's minimum, the vector index gave fewer candidates than it was asked for, or no result passed" do
-    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > where fewer results pass than the search keeps > while a candidate beyond the nearest share scores above the search's minimum, the vector index gave fewer candidates than it was asked for, or no result passed" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph, :seed_deep_vector_graph]
 
     test "then the search answers with the graph library's own query under the same restrictions, through the creation-time index when an earliest creation time is supplied to a fact search",
          context do
@@ -3659,20 +3678,25 @@ defmodule Gralkor.GraphitiPoolTest do
   describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > when the vector index is dropped" do
     setup [:start_real_embedded_pool, :seed_standard_vector_graph]
 
-    test "then the next search answers with the graph library's own query", %{instance: instance} do
-      found = dropped_search(instance)
-
-      assert Enum.any?(found["before"], &(&1 =~ "db.idx.vector"))
-      assert [status, own] = found["after"]
-      assert status =~ "CALL db.indexes()"
-      assert own =~ "vec.cosineDistance"
-      assert found["facts"] == found["own"]
+    test "then the next search answers with the graph library's own query", context do
+      assert_dropped_search_sends_own_query(context)
     end
 
-    test "and the vector index is not asked", %{instance: instance} do
-      found = dropped_search(instance)
+    test "and the vector index is not asked", context do
+      assert_dropped_search_asks_no_index(context)
+    end
+  end
 
-      refute Enum.any?(found["after"], &(&1 =~ "db.idx.vector"))
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built but compares by another similarity than cosine, or at another dimension than the search's embedding" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the search fails, naming the graph, the index, its similarity and dimension, and how to replace it",
+         context do
+      assert_mismatched_search_fails_naming_index(context)
+    end
+
+    test "and the vector index is not asked", context do
+      assert_mismatched_search_asks_no_index(context)
     end
   end
 
@@ -4023,6 +4047,31 @@ defmodule Gralkor.GraphitiPoolTest do
     %{instance: instance}
   end
 
+  # Ten more facts and entities than the vector index is asked for when a search
+  # keeps four, ever farther from the query vector, all scoring above 0.6 but
+  # the farthest; four of each, by `lens:rare`, lie beyond the nearest share
+  # of the candidates the vector index gives.
+  defp seed_deep_vector_graph(%{pid: pid}) do
+    instance = GraphitiPool.for(pid, "deep")
+
+    seed_vectors(instance, """
+    import graphiti_core.search.search_utils as search_utils
+    async def seed():
+        rng = random.Random(11)
+        count = search_utils._gralkor_nearest_count(4) + 10
+        middle = (search_utils._gralkor_trusted_count(4) + search_utils._gralkor_nearest_count(4)) // 2
+        step = 0.8 / count
+        def writers(i):
+            return ['lens:rare'] if middle <= i < middle + 4 else ['lens:alpha']
+        entities = [entity('e' + str(i), at_cosine(0.99 - i * step, rng), writers(i)) for i in range(count)]
+        facts = [fact('f' + str(i), 'e' + str(i), 'e' + str(i), at_cosine(0.99 - i * step, rng), writers(i)) for i in range(count)]
+        await write(entities, facts)
+    seed()
+    """)
+
+    %{deep: instance}
+  end
+
   # As many facts and entities by `lens:near` near the query vector as the
   # vector index is asked for when a search keeps four, and four more, and four
   # facts and entities by `lens:far`, farthest from it but still scoring above
@@ -4187,11 +4236,23 @@ defmodule Gralkor.GraphitiPoolTest do
             'since': ('fact', Filters(since='2026-02-17T00:00:00Z'), 0.6),
             'none passed': ('fact', SearchFilters(), 0.99),
             'entity writers': ('entity', Filters(writers=['reflection:review'], since='2026-02-14T00:00:00Z'), 0.6),
+            'fewer candidates': ('fact', SearchFilters(), 0.97),
         }
         found = {}
         for name, (kind, restriction, min_score) in cases.items():
             found[name] = await compare(kind, restriction, 4, min_score)
         return found
+    run()
+    """)
+  end
+
+  defp deep_fallback_searches(deep) do
+    similarity_run(deep, """
+    async def run():
+        return {
+            'beyond share': await compare('fact', Filters(writers=['lens:rare']), 5, 0.6),
+            'entity beyond share': await compare('entity', Filters(writers=['lens:rare']), 5, 0.6),
+        }
     run()
     """)
   end
@@ -4204,17 +4265,79 @@ defmodule Gralkor.GraphitiPoolTest do
 
   defp dropped_search(instance) do
     similarity_run(instance, """
+    DROPS = {
+        'fact': 'DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)',
+        'entity': 'DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)',
+    }
     async def run():
-        _, before = await recorded(lambda: search('fact', SearchFilters(), 4, 0.6))
-        await g.driver.execute_query('DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)')
-        facts, after = await recorded(lambda: search('fact', SearchFilters(), 4, 0.6))
-        own = await search('fact', SearchFilters(), 4, 0.6, wrapped=False)
-        return {
-            'before': [entry['cypher'] for entry in before],
-            'after': [entry['cypher'] for entry in after],
-            'facts': facts,
-            'own': own,
-        }
+        found = {}
+        for kind in ('fact', 'entity'):
+            _, before = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
+            await g.driver.execute_query(DROPS[kind])
+            results, after = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
+            found[kind] = {
+                'before': [entry['cypher'] for entry in before],
+                'after': [entry['cypher'] for entry in after],
+                'found': results,
+                'own': await search(kind, SearchFilters(), 4, 0.6, wrapped=False),
+            }
+        return found
+    run()
+    """)
+  end
+
+  defp mismatched_search(instance) do
+    graph_query(instance, "DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)")
+    graph_query(instance, "DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)")
+
+    graph_query(
+      instance,
+      "CREATE VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding) OPTIONS {dimension: 3, similarityFunction: 'euclidean'}"
+    )
+
+    graph_query(
+      instance,
+      "CREATE VECTOR INDEX FOR (n:Entity) ON (n.name_embedding) OPTIONS {dimension: 4, similarityFunction: 'cosine'}"
+    )
+
+    assert eventually(fn -> vector_indexes_built?(instance) end)
+
+    similarity_run(instance, """
+    async def failed(kind):
+        sent = []
+        async def call():
+            try:
+                await search(kind, SearchFilters(), 4, 0.6)
+            except RuntimeError as error:
+                return 'RuntimeError: ' + str(error)
+        error, sent = await recorded(call)
+        return {'error': error, 'sent': [entry['cypher'] for entry in sent]}
+    async def run():
+        return {kind: await failed(kind) for kind in ('fact', 'entity')}
+    run()
+    """)
+  end
+
+  # Searches the deep graph for its four `lens:rare` facts and entities, which
+  # lie among the candidates the vector index gives but beyond their nearest
+  # share, as the started pool wraps the search and as the graph library does.
+  defp deep_beyond_share(deep) do
+    similarity_run(deep, """
+    async def run():
+        return {kind: await compare(kind, Filters(writers=['lens:rare']), 4, 0.6) for kind in ('fact', 'entity')}
+    run()
+    """)
+  end
+
+  defp deep_within_share(deep) do
+    similarity_run(deep, """
+    async def run():
+        found = []
+        for kind in ('fact', 'entity'):
+            result = await compare(kind, SearchFilters(), 4, 0.6)
+            result['restriction'] = 'deep ' + kind
+            found.append(result)
+        return found
     run()
     """)
   end
@@ -7000,22 +7123,29 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   defp assert_index_building_fails_naming_graph_index_dimension_similarity(%{pid: pid}) do
-    instance = GraphitiPool.for(pid, "fresh")
+    for {group, options} <- [
+          {"fresh", "{dimension: 4, similarityFunction: 'cosine'}"},
+          {"euclidean", "{dimension: 3, similarityFunction: 'euclidean'}"}
+        ] do
+      instance = GraphitiPool.for(pid, group)
+      graph_query(instance, "DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)")
 
-    graph_query(instance, "DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)")
-    graph_query(instance, "DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)")
+      graph_query(
+        instance,
+        "CREATE VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding) OPTIONS " <> options
+      )
+    end
 
-    graph_query(
-      instance,
-      "CREATE VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding) OPTIONS {dimension: 4, similarityFunction: 'cosine'}"
-    )
+    assert {:error, {:vector_indexes, message}} = GraphitiPool.build_indices(pid)
 
-    assert {:error, {:python, message}} = GraphitiPool.build_indices(pid)
-    assert message =~ "RuntimeError: graph #{physical("fresh")}"
-    assert message =~ "RELATES_TO.fact_embedding"
-    assert message =~ "cosine at 4 dimensions"
-    assert message =~ "the embedder writes 3"
-    assert message =~ "DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)"
+    assert message =~
+             "graph #{physical("fresh")}: the RELATES_TO.fact_embedding vector index compares cosine at 4 dimensions, but the embedder writes 3"
+
+    assert message =~
+             "graph #{physical("euclidean")}: the RELATES_TO.fact_embedding vector index compares euclidean at 3 dimensions, but the embedder writes 3"
+
+    assert message =~
+             "drop it with DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding), wait until db.indexes() no longer lists it"
   end
 
   defp assert_fact_similarity_query_returns_facts_in_same_order_that_graph(%{instance: instance}) do
@@ -7092,6 +7222,54 @@ defmodule Gralkor.GraphitiPoolTest do
       refute row["writers"] == ["lens:beta"]
       assert row["created_at"] >= "2026-01-05"
     end
+
+    assert_entity_lookup_applies_restrictions(instance)
+  end
+
+  defp assert_entity_lookup_applies_restrictions(instance) do
+    found =
+      similarity_run(instance, """
+      async def run():
+          restriction = Filters(
+              node_labels=['Team'], writers=['lens:*'], excluded_writers=['lens:beta'],
+              since='2026-01-05T00:00:00Z',
+          )
+          entities, sent = await recorded(lambda: search('entity', restriction, 4, 0.6, ['g']))
+          own = await search('entity', restriction, 4, 0.6, ['g'], wrapped=False)
+          records, _, _ = await g.driver.execute_query(
+              'MATCH (n:Entity) WHERE n.uuid IN $uuids '
+              'RETURN n.uuid AS uuid, labels(n) AS labels, n.group_id AS group_id, '
+              'n._gralkor_writers AS writers, n.created_at AS created_at',
+              uuids=entities,
+          )
+          return {'entities': entities, 'own': own, 'rows': records, 'sent': sent}
+      run()
+      """)
+
+    [lookup] = Enum.filter(found["sent"], &(&1["cypher"] =~ "db.idx.vector"))
+
+    for clause <- [
+          "queryNodes",
+          "n.group_id IN $group_ids",
+          "n:Team",
+          "n._gralkor_writers",
+          "n.created_at >= $gralkor_since",
+          "LIMIT $limit"
+        ] do
+      assert lookup["cypher"] =~ clause
+    end
+
+    refute Enum.any?(found["sent"], &(&1["cypher"] =~ "vec.cosineDistance"))
+    assert length(found["entities"]) == 4
+    assert found["entities"] == found["own"]
+
+    for row <- found["rows"] do
+      assert row["group_id"] == "g"
+      assert "Team" in row["labels"]
+      assert Enum.any?(row["writers"], &String.starts_with?(&1, "lens:"))
+      refute row["writers"] == ["lens:beta"]
+      assert row["created_at"] >= "2026-01-05"
+    end
   end
 
   defp assert_each_result_scored_as_graph_library_scores_it_only_results_s(%{instance: instance}) do
@@ -7111,22 +7289,26 @@ defmodule Gralkor.GraphitiPoolTest do
     refute Enum.any?(found["sent"], &(&1["cypher"] =~ "vec.cosineDistance"))
   end
 
-  defp assert_no_stored_embedding_compared_with_searchs_outside_vector_ind(%{instance: instance}) do
-    for compared <- restriction_comparisons(instance) do
+  defp assert_no_stored_embedding_compared_with_searchs_outside_vector_ind(context) do
+    for compared <- answered_alone_comparisons(context) do
       assert Enum.any?(compared["sent"], &(&1 =~ "db.idx.vector")), compared["restriction"]
       refute Enum.any?(compared["sent"], &(&1 =~ "vec.cosineDistance")), compared["restriction"]
     end
   end
 
-  defp assert_search_returns_as_many_results_as_graph_librarys_own_query_r(%{instance: instance}) do
-    for compared <- restriction_comparisons(instance) do
+  defp assert_search_returns_as_many_results_as_graph_librarys_own_query_r(context) do
+    for compared <- answered_alone_comparisons(context) do
       assert length(compared["wrapped"]) == length(compared["own"]), compared["restriction"]
       assert length(compared["wrapped"]) == 4, compared["restriction"]
     end
   end
 
-  defp assert_every_result_scores_at_least_as_high_as_lowestscoring_result(%{instance: instance}) do
-    for compared <- restriction_comparisons(instance) do
+  defp answered_alone_comparisons(%{instance: instance, deep: deep}) do
+    restriction_comparisons(instance) ++ deep_within_share(deep)
+  end
+
+  defp assert_every_result_scores_at_least_as_high_as_lowestscoring_result(context) do
+    for compared <- answered_alone_comparisons(context) do
       lowest = List.last(compared["own_scores"])
 
       assert Enum.all?(compared["wrapped_scores"], &(&1 >= lowest - 1.0e-6)),
@@ -7143,14 +7325,20 @@ defmodule Gralkor.GraphitiPoolTest do
     assert found["reached"] == found["k"]
   end
 
-  defp assert_search_answers_with_graph_librarys_own_query_under_same_rest(%{instance: instance}) do
-    found = fallback_searches(instance)
+  defp assert_search_answers_with_graph_librarys_own_query_under_same_rest(%{
+         instance: instance,
+         deep: deep
+       }) do
+    found = Map.merge(fallback_searches(instance), deep_fallback_searches(deep))
 
     for {case_name, expected} <- [
           {"writers", "vec.cosineDistance"},
           {"since", "MATCH ()-[e:RELATES_TO]->()"},
           {"none passed", "vec.cosineDistance"},
-          {"entity writers", "vec.cosineDistance"}
+          {"entity writers", "vec.cosineDistance"},
+          {"fewer candidates", "vec.cosineDistance"},
+          {"beyond share", "vec.cosineDistance"},
+          {"entity beyond share", "vec.cosineDistance"}
         ] do
       [lookup, own] = Enum.reject(found[case_name]["sent"], &(&1 =~ "CALL db.indexes()"))
       assert lookup =~ "db.idx.vector", case_name
@@ -7163,15 +7351,25 @@ defmodule Gralkor.GraphitiPoolTest do
            )
   end
 
-  defp assert_returns_as_many_results_as_that_query_does(%{instance: instance}) do
-    found = fallback_searches(instance)
+  defp assert_returns_as_many_results_as_that_query_does(%{instance: instance, deep: deep}) do
+    found = Map.merge(fallback_searches(instance), deep_fallback_searches(deep))
 
-    for case_name <- ["writers", "since", "none passed", "entity writers"] do
+    for case_name <- [
+          "writers",
+          "since",
+          "none passed",
+          "entity writers",
+          "fewer candidates",
+          "beyond share",
+          "entity beyond share"
+        ] do
       assert found[case_name]["wrapped"] == found[case_name]["own"], case_name
     end
 
     assert length(found["writers"]["wrapped"]) == 2
     assert found["none passed"]["wrapped"] == []
+    assert length(found["fewer candidates"]["wrapped"]) == 1
+    assert length(found["beyond share"]["wrapped"]) == 4
   end
 
   defp assert_fact_search_returns_as_many_results_as_graph_librarys_own_qu(%{instance: instance}) do
@@ -7252,7 +7450,7 @@ defmodule Gralkor.GraphitiPoolTest do
     recorded_build(pid, group_id)
   end
 
-  defp recorded_build(pid, group_id) do
+  defp recorded_build(pid, group_id, status \\ :as_found) do
     instance = GraphitiPool.for(pid, group_id)
 
     {sent, _} =
@@ -7260,13 +7458,21 @@ defmodule Gralkor.GraphitiPoolTest do
         """
         sent = []
         original = g.driver.execute_query
+        def building(field):
+            return [
+                {'types': {'uuid': ['RANGE'], field: ['VECTOR']}, 'options': {'uuid': {}, field: {'dimension': 3, 'similarityFunction': 'cosine'}}, 'status': '[Indexing] 1/2: UNDER CONSTRUCTION'},
+                {'types': {'uuid': ['RANGE']}, 'options': {'uuid': {}}, 'status': 'OPERATIONAL'},
+            ]
         async def recording(cypher, **params):
             sent.append(cypher)
+            if being_built and cypher.startswith('CALL db.indexes()') and 'gralkor_label' in params:
+                field = 'fact_embedding' if params['gralkor_label'] == 'RELATES_TO' else 'name_embedding'
+                return building(field), ['types', 'options', 'status'], None
             return await original(cypher, **params)
         g.driver.execute_query = recording
         sent
         """,
-        %{"g" => instance}
+        %{"g" => instance, "being_built" => status == :being_built}
       )
 
     assert {:ok, _} = capture_log_result(fn -> GraphitiPool.build_indices(pid) end)
@@ -7289,5 +7495,107 @@ defmodule Gralkor.GraphitiPoolTest do
 
     assert {:error, _} = GraphitiPool.build_indices(pid)
     instance
+  end
+
+  defp assert_deep_beyond_share_sends_own_query(%{deep: deep}) do
+    for {kind, found} <- deep_beyond_share(deep) do
+      [lookup, own] = Enum.reject(found["sent"], &(&1 =~ "CALL db.indexes()"))
+      assert lookup =~ "db.idx.vector", kind
+      assert own =~ "vec.cosineDistance", kind
+    end
+  end
+
+  defp assert_deep_beyond_share_returns_own_results(%{deep: deep}) do
+    for {kind, found} <- deep_beyond_share(deep) do
+      assert found["wrapped"] == found["own"], kind
+      assert length(found["wrapped"]) == 4, kind
+    end
+  end
+
+  defp assert_dropped_search_sends_own_query(%{instance: instance}) do
+    for {kind, found} <- dropped_search(instance) do
+      assert Enum.any?(found["before"], &(&1 =~ "db.idx.vector")), kind
+      assert [status, own] = found["after"]
+      assert status =~ "CALL db.indexes()", kind
+      assert own =~ "vec.cosineDistance", kind
+      assert found["found"] == found["own"], kind
+    end
+  end
+
+  defp assert_dropped_search_asks_no_index(%{instance: instance}) do
+    for {kind, found} <- dropped_search(instance) do
+      refute Enum.any?(found["after"], &(&1 =~ "db.idx.vector")), kind
+    end
+  end
+
+  defp assert_mismatched_search_fails_naming_index(%{instance: instance}) do
+    found = mismatched_search(instance)
+
+    assert found["fact"]["error"] =~ "RuntimeError: graph #{physical("vectors")}"
+
+    assert found["fact"]["error"] =~
+             "RELATES_TO.fact_embedding vector index compares euclidean at 3 dimensions"
+
+    assert found["fact"]["error"] =~
+             "DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)"
+
+    assert found["entity"]["error"] =~
+             "Entity.name_embedding vector index compares cosine at 4 dimensions"
+
+    assert found["entity"]["error"] =~ "but the embedder writes 3"
+    assert found["entity"]["error"] =~ "DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)"
+  end
+
+  defp assert_mismatched_search_asks_no_index(%{instance: instance}) do
+    for {kind, found} <- mismatched_search(instance) do
+      assert [status] = found["sent"], kind
+      assert status =~ "CALL db.indexes()", kind
+    end
+  end
+
+  defp assert_no_vector_index_created_again(%{pid: pid}) do
+    GraphitiPool.for(pid, "fresh")
+    built = recorded_build(pid, "fresh")
+    being_built = recorded_build(pid, "fresh", :being_built)
+
+    refute Enum.any?(built, &(&1 =~ "CREATE VECTOR INDEX"))
+    refute Enum.any?(being_built, &(&1 =~ "CREATE VECTOR INDEX"))
+  end
+
+  defp assert_replacement_and_recording_logged_beside_mismatch(%{pid: pid}) do
+    create_stopword_indexes(%{pid: pid})
+
+    physical_graph_query(pid, "stopwords", [
+      "CREATE VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding) OPTIONS {dimension: 4, similarityFunction: 'cosine'}"
+    ])
+
+    log = capture_log(fn -> GraphitiPool.for(pid, "stopwords") end)
+
+    assert log =~
+             "full-text indexes rebuilt without stopwords (FalkorDB #3348) — labels: Episodic"
+
+    assert log =~
+             "recorded writers for memory written before writers were recorded — graph: #{physical("stopwords")} episodes: 1"
+
+    assert log =~
+             "build_indices_and_constraints failed (non-fatal): graph #{physical("stopwords")}: the RELATES_TO.fact_embedding vector index"
+  end
+
+  defp assert_other_graphs_built_beside_mismatch(%{pid: pid}) do
+    others = ["other-1", "other-2", "other-3"]
+
+    for group <- others do
+      pid
+      |> GraphitiPool.for(group)
+      |> graph_query("DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)")
+    end
+
+    mismatched_build(pid)
+
+    for group <- others do
+      assert vector_index_options(GraphitiPool.for(pid, group))["Entity.name_embedding"] ==
+               {"cosine", 3},
+             group
+    end
   end
 end

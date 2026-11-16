@@ -259,14 +259,18 @@ when a fact or entity similarity search runs on FalkorDB
     and the group, the graph library's own filters, the included and excluded writers, and the earliest creation time are applied to what the vector index gives, inside the same query, before the search's limit
     and each result is scored as the graph library scores it, and only results scoring above the search's minimum are kept, best first
     where at least as many results pass as the search keeps
-      then no stored embedding is compared with the search's outside the vector index
-      and the search returns as many results as the graph library's own query returns under the same restrictions
-      and every result scores at least as high as the lowest-scoring result of the graph library's own query
+      while the vector index gave fewer candidates than it was asked for, or the last result kept is within the nearest share of the candidates it gave
+        then no stored embedding is compared with the search's outside the vector index
+        and the search returns as many results as the graph library's own query returns under the same restrictions
+        and every result scores at least as high as the lowest-scoring result of the graph library's own query, as long as the vector index gives the truly nearest candidates
+      while the vector index gave every candidate it was asked for and the last result kept lies beyond the nearest share of them
+        then the search answers with the graph library's own query under the same restrictions
+        and returns what that query returns
     where fewer results pass than the search keeps
-      while the vector index gave every candidate it was asked for, the farthest of them scores at or below the search's minimum, and at least one result passed
+      while the vector index gave every candidate it was asked for, every candidate scoring above the search's minimum is within the nearest share of them, and at least one result passed
         then the results that passed are returned
         and the graph library's own query is not sent
-      while the farthest candidate scores above the search's minimum, the vector index gave fewer candidates than it was asked for, or no result passed
+      while a candidate beyond the nearest share scores above the search's minimum, the vector index gave fewer candidates than it was asked for, or no result passed
         then the search answers with the graph library's own query under the same restrictions, through the creation-time index when an earliest creation time is supplied to a fact search
         and returns as many results as that query does
     while writers are included and few of the graph's facts are theirs
@@ -276,6 +280,9 @@ when a fact or entity similarity search runs on FalkorDB
     when the vector index is dropped
       then the next search answers with the graph library's own query
       and the vector index is not asked
+  while the graph's vector index for those embeddings is built but compares by another similarity than cosine, or at another dimension than the search's embedding
+    then the search fails, naming the graph, the index, its similarity and dimension, and how to replace it
+    and the vector index is not asked
   while the graph's vector index for those embeddings is still being built
     then the search answers with the graph library's own query
     and the vector index is not asked
@@ -313,6 +320,8 @@ when a graph instance's indexes are built on FalkorDB
     then it is left unchanged
     and a vector index the graph lacks is still created
     and index building fails, naming the graph, the index, its dimension and similarity, the embedder's dimension, and how to replace it
+    and any stopword replacement and writer recording done before it are still logged
+    and every other graph's indexes are still built
   while a label's index already carries a stopword list
     then every index on that label is dropped and recreated with the same fields and no stopword list
     and the replacement is logged naming the label

@@ -82,8 +82,10 @@ defmodule Gralkor.GraphitiPool do
     gralkor_union = [], gralkor_list IN gralkor_lists |
     gralkor_union + [gralkor_writer IN gralkor_list WHERE NOT gralkor_writer IN gralkor_union]
   ) AS gralkor_writers
-  SET gralkor_target._gralkor_writers =
-    CASE WHEN size(gralkor_writers) = 0 THEN ['unknown'] ELSE gralkor_writers END
+  WITH gralkor_target,
+    CASE WHEN size(gralkor_writers) = 0 THEN ['unknown'] ELSE gralkor_writers END AS gralkor_writers
+  WHERE gralkor_target._gralkor_writers IS NULL OR gralkor_target._gralkor_writers <> gralkor_writers
+  SET gralkor_target._gralkor_writers = gralkor_writers
   RETURN count(gralkor_target) AS tagged
   '''
 
@@ -198,6 +200,7 @@ defmodule Gralkor.GraphitiPool do
   }
   NEAREST_FLOOR = 2000
   NEAREST_PER_RESULT = 20
+  NEAREST_TRUSTED_SHARE = 0.2
   VECTOR_INDEX_STATUS = (
       'CALL db.indexes() YIELD label, types, options, entitytype, status\\n'
       'WHERE label = $gralkor_label AND entitytype = $gralkor_entitytype\\n'
@@ -206,6 +209,9 @@ defmodule Gralkor.GraphitiPool do
 
   def nearest_count(limit):
       return max(NEAREST_FLOOR, NEAREST_PER_RESULT * limit)
+
+  def trusted_count(limit):
+      return int(nearest_count(limit) * NEAREST_TRUSTED_SHARE)
 
   async def vector_index(driver, kind):
       spec = VECTOR_INDEXES[kind]
@@ -218,12 +224,24 @@ defmodule Gralkor.GraphitiPool do
       rows = [record for record in records if 'VECTOR' in ((record['types'] or {}).get(spec['field']) or [])]
       if not rows:
           return None
-      options = (rows[0]['options'] or {}).get(spec['field']) or {}
+      operational = [row for row in rows if row['status'] == 'OPERATIONAL']
+      options = ((operational or rows)[0]['options'] or {}).get(spec['field']) or {}
       return {
-          'built': any(row['status'] == 'OPERATIONAL' for row in rows),
+          'built': bool(operational),
           'dimension': options.get('dimension'),
           'similarity': options.get('similarityFunction'),
       }
+
+  def vector_index_mismatch(driver, kind, index, dimension):
+      if index['dimension'] == dimension and index['similarity'] == 'cosine':
+          return None
+      spec = VECTOR_INDEXES[kind]
+      return (
+          f"graph {driver._database}: the {spec['label']}.{spec['field']} vector index compares "
+          f"{index['similarity']} at {index['dimension']} dimensions, but the embedder writes {dimension}, "
+          f"compared by cosine; drop it with DROP VECTOR INDEX FOR {spec['pattern']}, wait until db.indexes() "
+          f"no longer lists it, and build the graph's indexes again"
+      )
 
   async def create_vector_indexes(g):
       driver = getattr(g, 'driver', None)
@@ -233,30 +251,25 @@ defmodule Gralkor.GraphitiPool do
           or getattr(driver, 'search_interface', None)
           or embedder is None
       ):
-          return {'created': [], 'dimension': None}
+          return {'created': [], 'dimension': None, 'mismatched': []}
       dimension = int(embedder.config.embedding_dim)
       created = []
       mismatched = []
       for kind in ('fact', 'entity'):
           spec = VECTOR_INDEXES[kind]
           index = await vector_index(driver, kind)
-          name = spec['label'] + '.' + spec['field']
           if index is None:
               result = await driver.execute_query(
                   'CREATE VECTOR INDEX FOR ' + spec['pattern']
                   + ' OPTIONS {dimension: ' + str(dimension) + ", similarityFunction: 'cosine'}"
               )
               if result is not None:
-                  created.append(name)
-          elif index['dimension'] != dimension or index['similarity'] != 'cosine':
-              mismatched.append(
-                  f"graph {driver._database}: the {name} vector index compares {index['similarity']} "
-                  f"at {index['dimension']} dimensions, but the embedder writes {dimension}; drop it with "
-                  f"DROP VECTOR INDEX FOR {spec['pattern']} and build the graph's indexes again"
-              )
-      if mismatched:
-          raise RuntimeError('; '.join(mismatched))
-      return {'created': created, 'dimension': dimension}
+                  created.append(spec['label'] + '.' + spec['field'])
+          else:
+              mismatch = vector_index_mismatch(driver, kind, index, dimension)
+              if mismatch:
+                  mismatched.append(mismatch)
+      return {'created': created, 'dimension': dimension, 'mismatched': mismatched}
   """
 
   # graphiti-core 0.31.2's SearchFilters has no writer filter, its episode
@@ -279,9 +292,13 @@ defmodule Gralkor.GraphitiPool do
   #   the node the full-text index yields instead of matching it again;
   # * once the graph's vector index for facts or entities is built, fact and
   #   entity similarity searches read their nearest candidates from it and
-  #   filter them in the same query; when fewer pass than the search keeps they
-  #   answer with graphiti's own query (the creation-time one with `since`),
-  #   unless the farthest candidate already scores at or below the minimum;
+  #   filter them in the same query; they answer with graphiti's own query (the
+  #   creation-time one with `since`) when the index gave every candidate asked
+  #   for and the last result kept, or with fewer results than the search keeps
+  #   any candidate above the minimum, lies beyond the nearest share of them,
+  #   where the index's ranking is least exact, or when nothing passed, or when
+  #   fewer passed from an index that gave fewer candidates than asked for;
+  # * a built vector index at another similarity or dimension fails the search;
   # * fact searches that name facts or their entities never ask the index;
   # * entity similarity search is wrapped where ingestion's entity
   #   deduplication binds it, in node_operations, as well;
@@ -493,22 +510,35 @@ defmodule Gralkor.GraphitiPool do
           )
 
       def answered(records, k, limit, min_score):
-          if len(records) >= limit:
-              return True
           if not records:
               return False
-          return records[0]['gralkor_reached'] >= k and (2 - records[0]['gralkor_farthest']) / 2 <= min_score
+          if records[0]['gralkor_reached'] < k:
+              return len(records) >= limit
+          trusted = (2 - records[0]['gralkor_trusted']) / 2
+          if len(records) >= limit:
+              return records[-1]['gralkor_score'] >= trusted
+          return trusted <= min_score
 
       def nearest(procedure, label, field, yielded, variable):
           return (
               f"CALL db.idx.vector.{procedure}('{label}', '{field}', $gralkor_k, vecf32($search_vector))"
               + f'\\nYIELD {yielded}, score AS gralkor_distance'
               + f'\\nWITH collect([{yielded}, gralkor_distance]) AS gralkor_candidates, '
-              + 'count(gralkor_distance) AS gralkor_reached, max(gralkor_distance) AS gralkor_farthest'
+              + 'count(gralkor_distance) AS gralkor_reached, '
+              + 'percentileDisc(gralkor_distance, $gralkor_trusted_share) AS gralkor_trusted'
               + '\\nUNWIND gralkor_candidates AS gralkor_candidate'
               + f'\\nWITH gralkor_candidate[0] AS {variable}, (2 - gralkor_candidate[1])/2 AS score, '
-              + 'gralkor_reached, gralkor_farthest'
+              + 'gralkor_reached, gralkor_trusted'
           )
+
+      async def built_index(driver, kind, search_vector):
+          index = await vector_index(driver, kind)
+          if index is None or not index['built']:
+              return None
+          mismatch = vector_index_mismatch(driver, kind, index, len(search_vector))
+          if mismatch:
+              raise RuntimeError(mismatch)
+          return index
 
       def similarity_search(original):
           async def edge_similarity_search(
@@ -521,8 +551,7 @@ defmodule Gralkor.GraphitiPool do
               )
               if not on_falkordb(driver) or names_records(search_filter, source_node_uuid, target_node_uuid):
                   return await own_fact_query(*arguments)
-              index = await vector_index(driver, 'fact')
-              if index is None or not index['built']:
+              if await built_index(driver, 'fact', search_vector) is None:
                   return await own_fact_query(*arguments)
               k = nearest_count(limit)
               fact_clauses, params = writer_clauses('e', search_filter)
@@ -535,17 +564,18 @@ defmodule Gralkor.GraphitiPool do
               cypher = (
                   nearest('queryRelationships', 'RELATES_TO', 'fact_embedding', 'relationship', 'e')
                   + '\\nWHERE ' + ' AND '.join(['score > $min_score'] + fact_clauses)
-                  + '\\nWITH e, score, gralkor_reached, gralkor_farthest, startNode(e) AS n, endNode(e) AS m'
+                  + '\\nWITH e, score, gralkor_reached, gralkor_trusted, startNode(e) AS n, endNode(e) AS m'
                   + '\\nWHERE ' + ' AND '.join(entity_clauses)
                   + '\\nRETURN\\n'
                   + search_utils.get_entity_edge_return_query(driver.provider)
-                  + ',\\ngralkor_reached, gralkor_farthest'
+                  + ',\\nscore AS gralkor_score, gralkor_reached, gralkor_trusted'
                   + '\\nORDER BY score DESC\\nLIMIT $limit'
               )
               records, _, _ = await driver.execute_query(
                   cypher,
                   search_vector=search_vector,
                   gralkor_k=k,
+                  gralkor_trusted_share=NEAREST_TRUSTED_SHARE,
                   limit=limit,
                   min_score=min_score,
                   routing_='r',
@@ -611,8 +641,7 @@ defmodule Gralkor.GraphitiPool do
               arguments = (driver, search_vector, search_filter, group_ids, limit, min_score)
               if not on_falkordb(driver):
                   return await original(*arguments)
-              index = await vector_index(driver, 'entity')
-              if index is None or not index['built']:
+              if await built_index(driver, 'entity', search_vector) is None:
                   return await original(*arguments)
               k = nearest_count(limit)
               clauses, params = search_utils.node_search_filter_query_constructor(search_filter, driver.provider)
@@ -625,13 +654,14 @@ defmodule Gralkor.GraphitiPool do
                   + '\\nWHERE ' + ' AND '.join(clauses)
                   + '\\nRETURN\\n'
                   + search_utils.get_entity_node_return_query(driver.provider)
-                  + ',\\ngralkor_reached, gralkor_farthest'
+                  + ',\\nscore AS gralkor_score, gralkor_reached, gralkor_trusted'
                   + '\\nORDER BY score DESC\\nLIMIT $limit'
               )
               records, _, _ = await driver.execute_query(
                   cypher,
                   search_vector=search_vector,
                   gralkor_k=k,
+                  gralkor_trusted_share=NEAREST_TRUSTED_SHARE,
                   limit=limit,
                   min_score=min_score,
                   routing_='r',
@@ -735,6 +765,7 @@ defmodule Gralkor.GraphitiPool do
       search_utils._gralkor_search_filter_originals = restorable
       search_utils._gralkor_read_timeout = read_timeout
       search_utils._gralkor_nearest_count = nearest_count
+      search_utils._gralkor_trusted_count = trusted_count
       search_utils._gralkor_search_filters = WriterSearchFilters
       return WriterSearchFilters
   """
@@ -2095,9 +2126,16 @@ defmodule Gralkor.GraphitiPool do
     server
     |> table_for()
     |> :ets.tab2list()
-    |> Enum.each(fn {_group_id, instance} -> initialise_instance(instance) end)
-
-    {:ok, %{status: "built"}}
+    |> Enum.flat_map(fn {_group_id, instance} ->
+      case initialise_instance(instance) do
+        :ok -> []
+        {:error, {:vector_indexes, message}} -> [message]
+      end
+    end)
+    |> case do
+      [] -> {:ok, %{status: "built"}}
+      mismatched -> {:error, {:vector_indexes, Enum.join(mismatched, "; ")}}
+    end
   rescue
     e in Pythonx.Error -> python_failure(e, :build_indices)
   end
@@ -2195,13 +2233,17 @@ defmodule Gralkor.GraphitiPool do
   end
 
   @doc false
-  @spec initialise_instance(any()) :: :ok
+  @spec initialise_instance(any()) :: :ok | {:error, {:vector_indexes, String.t()}}
   def initialise_instance(instance) do
     %{
       "replaced" => replaced,
       "tagged" => tagged,
       "graph" => graph,
-      "vector_indexes" => %{"created" => created, "dimension" => dimension}
+      "vector_indexes" => %{
+        "created" => created,
+        "dimension" => dimension,
+        "mismatched" => mismatched
+      }
     } =
       """
       #{@writer_recording}
@@ -2246,7 +2288,10 @@ defmodule Gralkor.GraphitiPool do
       )
     end
 
-    :ok
+    case mismatched do
+      [] -> :ok
+      _ -> {:error, {:vector_indexes, Enum.join(mismatched, "; ")}}
+    end
   end
 
   # Each role — llm, LLM route, reranker, and embedder — picks its provider from
@@ -3479,7 +3524,13 @@ defmodule Gralkor.GraphitiPool do
     instance = state.construct_instance.(state.falkor_db, state.shared, sanitized_group_id)
 
     try do
-      state.initialise_instance.(instance)
+      case state.initialise_instance.(instance) do
+        {:error, {:vector_indexes, message}} ->
+          Logger.warning("[gralkor] build_indices_and_constraints failed (non-fatal): #{message}")
+
+        _ ->
+          :ok
+      end
     rescue
       error in Pythonx.Error ->
         Logger.warning(
