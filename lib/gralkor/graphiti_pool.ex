@@ -3250,8 +3250,7 @@ defmodule Gralkor.GraphitiPool do
     :ets.delete(@registry, {:read_timeout_ms, table})
   end
 
-  defp read_timeout_ms(socket_timeout) when is_number(socket_timeout),
-    do: max(trunc(socket_timeout * 900), 1)
+  defp read_timeout_below(socket_timeout_seconds), do: max(trunc(socket_timeout_seconds * 900), 1)
 
   defp read_timeout_ms(server) do
     table = table_for(server)
