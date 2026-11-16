@@ -27,6 +27,19 @@ when a remote FalkorDB accepts a connection and never replies
   then an episode write returns `{:error, :timeout}`
   and runtime-targeted Lens ingestion returns `{:error, :timeout}`
   and the timeout is logged with the stage it hit
+  and the write's graph query is sent once
+
+when an episode write's graph query runs past the socket timeout on the embedded FalkorDB
+  then the write returns `{:error, :timeout}`
+  and the query reaches FalkorDB once
+
+when a memory search's graph query runs past the socket timeout on the embedded FalkorDB
+  then the search returns `{:error, :timeout}`
+  and the query reaches FalkorDB once
+
+if the embedded FalkorDB connection is closed while an episode write's graph query runs
+  then the write returns an error naming the closed connection
+  and the query reaches FalkorDB once
 
 when a graph operation outlasts `:graph_operation_deadline_ms`
   then the episode write returns `{:error, :timeout}` within the deadline
