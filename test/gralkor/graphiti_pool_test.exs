@@ -2610,7 +2610,7 @@ defmodule Gralkor.GraphitiPoolTest do
                List.duplicate(%{"severity" => "high", "_gralkor_writers" => ["lens:alpha"]}, 3)
 
       assert searched["nodes"] ==
-               List.duplicate(%{"team" => "payments", "_gralkor_writers" => ["lens:alpha"]}, 2)
+               List.duplicate(%{"team" => "payments", "_gralkor_writers" => ["lens:alpha"]}, 4)
 
       assert searched["edges"] == searched["own_edges"]
       assert searched["nodes"] == searched["own_nodes"]
