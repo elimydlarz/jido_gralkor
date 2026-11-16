@@ -212,7 +212,6 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
         falkordb_spec: {:embedded, data_dir},
         embedded_falkordb_socket_timeout_ms: 1_000,
         graph_operation_deadline_ms: 60_000,
-        install_loop_fn: &Gralkor.Python.install_async_runtime/0,
         construct_instance: fn database, _shared, group_id ->
           send(parent, {:slow_database, database})
           slow_graph(database, group_id)
