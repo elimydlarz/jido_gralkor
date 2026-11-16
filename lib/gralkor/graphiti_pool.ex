@@ -935,10 +935,9 @@ defmodule Gralkor.GraphitiPool do
             }
             for n in list(results.nodes)[:node_limit]
           ]
-          episodes = list(results.episodes)
-          if episodes:
-            await hydrate_episode_writers(getattr(g, 'driver', None), episodes)
-          episodes = (await completed_reflection_episodes(episodes))[:episode_limit]
+          episodes = [
+            e for e in episodes if not reflection_episode(e) or completed(e, recorded)
+          ][:episode_limit]
           return {
             "facts": facts,
             "nodes": nodes,
