@@ -3302,11 +3302,26 @@ defmodule Gralkor.GraphitiPoolTest do
                 self.writers = {"episode-1": ["direct"], "lens-episode": ["lens:alpha"]}
                 self._gralkor_completed_episode_uuids = {"complete"}
 
+            async def follow_up(self, read):
+                self.recorded["follow_ups"].append(read)
+                self.in_flight += 1
+                self.recorded["most_in_flight"] = max(self.recorded["most_in_flight"], self.in_flight)
+                await asyncio.sleep(0.05)
+                self.in_flight -= 1
+
             async def execute_query(self, query, **params):
                 if "_gralkor_writers AS writers" in query:
-                    return ([{"uuid": uuid, "writer": None, "writers": self.writers.get(uuid)} for uuid in params["uuids"]], None, None)
-                if "_gralkor_extraction_complete" in query:
-                    return ([{"uuid": uuid} for uuid in params["uuids"] if uuid in self._gralkor_completed_episode_uuids], None, None)
+                    await self.follow_up("recorded")
+                    return ([
+                        {
+                            "uuid": uuid,
+                            "writer": None,
+                            "writers": self.writers.get(uuid),
+                            "complete": uuid in self._gralkor_completed_episode_uuids,
+                        }
+                        for uuid in params["uuids"]
+                    ], None, None)
+                await self.follow_up("entity names")
                 return ([{"uuid": uuid, "name": self.entities[uuid]} for uuid in params["uuids"] if uuid in self.entities], None, None)
 
         class _Edge:
