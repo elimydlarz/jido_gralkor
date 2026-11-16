@@ -550,9 +550,58 @@ defmodule Gralkor.GraphitiPool do
   """
 
   @fact_rendering """
-  async def render_facts(g, edges, writers=(), excluded_writers=()):
+  async def read_follow_up(driver, edges, episodes=()):
+      import asyncio
+      from graphiti_core.driver.driver import GraphProvider
       from graphiti_core.nodes import EpisodicNode
 
+      records_writers = getattr(driver, 'provider', None) == GraphProvider.FALKORDB
+      source_ids = list(dict.fromkeys(
+          episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
+      ))
+      endpoint_ids = list(dict.fromkeys(
+          endpoint_id
+          for edge in edges
+          for endpoint_id in (getattr(edge, "source_node_uuid", None), getattr(edge, "target_node_uuid", None))
+          if endpoint_id
+      ))
+      recorded_ids = list(dict.fromkeys(source_ids + [episode.uuid for episode in episodes]))
+
+      async def sources():
+          return await EpisodicNode.get_by_uuids(driver, source_ids) if source_ids else []
+
+      async def recorded():
+          if not records_writers or not recorded_ids:
+              return {}
+          records, _, _ = await driver.execute_query(
+              'MATCH (e:Episodic) WHERE e.uuid IN $uuids '
+              'RETURN e.uuid AS uuid, e._gralkor_writer AS writer, e._gralkor_writers AS writers, '
+              'coalesce(e._gralkor_extraction_complete, false) AS complete',
+              uuids=recorded_ids,
+          )
+          return {record['uuid']: record for record in records}
+
+      async def names():
+          if not endpoint_ids:
+              return {}
+          records, _, _ = await driver.execute_query(
+              'MATCH (n:Entity) WHERE n.uuid IN $uuids RETURN n.uuid AS uuid, n.name AS name',
+              uuids=endpoint_ids,
+          )
+          return {record['uuid']: record['name'] for record in records}
+
+      sourced, recorded_by_uuid, endpoint_names = await asyncio.gather(sources(), recorded(), names())
+      if records_writers:
+          for episode in list(sourced) + list(episodes):
+              record = recorded_by_uuid.get(episode.uuid, {})
+              if record.get('writer') == 'direct':
+                  episode.__dict__['_gralkor_writer'] = 'direct'
+              else:
+                  episode.__dict__.pop('_gralkor_writer', None)
+              episode.__dict__['_gralkor_writers'] = list(record.get('writers') or [])
+      return sourced, recorded_by_uuid, endpoint_names
+
+  def render_facts(edges, episodes, endpoint_names, writers=(), excluded_writers=()):
       def named(writer, selected):
           return any(
               writer.startswith(selector[:-1]) if selector.endswith(':*') else writer == selector
@@ -566,32 +615,12 @@ defmodule Gralkor.GraphitiPool do
               and (not excluded_writers or any(not named(writer, excluded_writers) for writer in produced))
           )
 
-      episode_ids = list(dict.fromkeys(
-          episode_id for edge in edges for episode_id in (getattr(edge, "episodes", None) or [])
-      ))
-      episodes = await EpisodicNode.get_by_uuids(g.driver, episode_ids) if episode_ids else []
-      if episodes:
-          await hydrate_episode_writers(g.driver, episodes)
       episodes_by_id = {episode.uuid: episode for episode in episodes}
       source_kinds = {
           "message": "conversation",
           "text": "document",
           "json": "structured_record",
       }
-
-      endpoint_ids = list(dict.fromkeys(
-          endpoint_id
-          for edge in edges
-          for endpoint_id in (getattr(edge, "source_node_uuid", None), getattr(edge, "target_node_uuid", None))
-          if endpoint_id
-      ))
-      endpoint_names = {}
-      if endpoint_ids:
-          records, _, _ = await g.driver.execute_query(
-              'MATCH (n:Entity) WHERE n.uuid IN $uuids RETURN n.uuid AS uuid, n.name AS name',
-              uuids=endpoint_ids,
-          )
-          endpoint_names = {record['uuid']: record['name'] for record in records}
 
       def endpoint(endpoint_id):
           if not endpoint_id:
