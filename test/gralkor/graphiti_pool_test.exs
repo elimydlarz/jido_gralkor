@@ -2647,13 +2647,12 @@ defmodule Gralkor.GraphitiPoolTest do
     test "then FalkorDB stops running it", %{pid: pid, outcome: outcome} do
       assert {:error, _} = outcome
 
-      [info] =
+      info =
         Gralkor.Python.run_coroutine(
           "database.connection.execute_command('GRAPH.INFO')",
           %{"database" => :sys.get_state(pid).falkor_db}
         )
         |> Pythonx.decode()
-        |> then(&[&1])
 
       assert ["# Running queries", [], "# Waiting queries", [] | _] = info
     end
