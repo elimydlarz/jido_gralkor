@@ -1320,6 +1320,22 @@ defmodule Gralkor.GraphitiPoolTest do
              ) ==
                %{"lesson" => ["lens:alpha", "direct"], "project" => ["lens:alpha"]}
     end
+
+    test "and no query the write sends carries a query timeout" do
+      %{pid: pid, g: g} = start_writer_recording_pool()
+      plan_extraction(g, ["lesson", "project"], [["learns", "lesson", "project"]])
+      spy = spy_query_timeouts()
+
+      assert :ok =
+               GraphitiPool.add_episode(pid, "writers", "first", "notes", nil,
+                 lens: "alpha",
+                 uuid: "timeless-episode"
+               )
+
+      timeouts = spied_timeouts(spy)
+      assert length(timeouts) >= 5
+      assert Enum.uniq(timeouts) == [nil]
+    end
   end
 
   describe "when one episode is requested by exact identifier" do
