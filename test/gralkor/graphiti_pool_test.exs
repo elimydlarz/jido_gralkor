@@ -2762,7 +2762,7 @@ defmodule Gralkor.GraphitiPoolTest do
             'edges': [edge.attributes for edge in edges],
             'nodes': [node.attributes for node in nodes],
             'own_edges': [edge.attributes for edge in own_edges] * 3,
-            'own_nodes': [node.attributes for node in own_nodes],
+            'own_nodes': [node.attributes for node in own_nodes] * 2,
         }
 
     run()
