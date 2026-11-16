@@ -130,6 +130,7 @@ when a Chain of Thought step begins
 
   where the directions reference outputs from earlier steps
     then every referenced value is interpolated from the Chain of Thought's shared output space
+    and an output whose name holds a space is interpolated too
 
   where inference directs a tool call
     then the requested tool is called with the model-produced arguments
