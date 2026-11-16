@@ -792,6 +792,34 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
       assert second.directions =~ "fact one"
       refute second.directions =~ "{{facts}}"
     end
+
+    test "and an output whose name holds a space is interpolated too" do
+      cot = %{
+        steps: [
+          %{label: "gather", directions: "Gather.", output: %{"blocked tasks" => "Array<string>"}},
+          %{
+            label: "synthesise",
+            directions: "Confirm {{ blocked tasks }}.",
+            output: %{"artefact" => "string"}
+          }
+        ]
+      }
+
+      reflection = resolve_reflection(valid_definition(chain_of_thought: cot))
+      parent = self()
+
+      inference = fn
+        %{step: %{label: "gather"}} ->
+          {:ok, %{output: %{"blocked tasks" => ["OPS-12"]}}}
+
+        %{step: %{label: "synthesise"}} = request ->
+          send(parent, {:request, request})
+          {:ok, %{output: %{"artefact" => "OPS-12 is blocked"}}}
+      end
+
+      assert {:ok, _} = Runner.run(reflection, invocation(), inference: inference)
+      assert_receive {:request, %{directions: ~s(Confirm ["OPS-12"].)}}
+    end
   end
 
   describe "when a Chain of Thought step begins > where inference directs a tool call" do
