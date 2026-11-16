@@ -143,7 +143,7 @@ defmodule Gralkor.Reflection.Runner do
     do: {:error, %{reflection: reflection.name, step: step.label, reason: reason}}
 
   defp interpolate(directions, outputs) do
-    Regex.replace(~r/\{\{\s*([A-Za-z_][A-Za-z0-9_-]*)\s*\}\}/, directions, fn _, name ->
+    ChainOfThought.interpolate(directions, fn name ->
       outputs |> Map.fetch!(name) |> render_value()
     end)
   end
