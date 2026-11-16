@@ -923,9 +923,10 @@ defmodule Gralkor.GraphitiPool do
           else:
             search_filter = SearchFilters(node_labels=labels, edge_types=types)
           results = await g.search_(q, config=config, search_filter=search_filter)
-          facts = await render_facts(
-            g, list(results.edges)[:fact_limit], included_writers, rejected_writers
-          )
+          edges = list(results.edges)[:fact_limit]
+          episodes = list(results.episodes)
+          sources, recorded, endpoint_names = await read_follow_up(getattr(g, 'driver', None), edges, episodes)
+          facts = render_facts(edges, sources, endpoint_names, included_writers, rejected_writers)
           nodes = [
             {
               "name": n.name,
