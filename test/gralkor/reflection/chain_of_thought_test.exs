@@ -219,6 +219,12 @@ defmodule Gralkor.Reflection.ChainOfThoughtTest do
 
       assert ChainOfThought.interpolations("Review evidence.") == []
     end
+
+    test "and each name is the text between the double braces without its surrounding spaces, whatever characters it holds" do
+      assert ChainOfThought.interpolations(
+               "{{ blocked tasks }} and {{confirmed.blocked/tasks}} then {{ }} and {{\n recommended actions? \n}}"
+             ) == ["blocked tasks", "confirmed.blocked/tasks", "", "recommended actions?"]
+    end
   end
 
   defp step(label, output) do
