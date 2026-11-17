@@ -7971,7 +7971,9 @@ defmodule Gralkor.GraphitiPoolTest do
 
       assert built.waits == [], matching
       assert tries(built.sent) == 1, matching
-      assert built.result == {:error, {:python, "RuntimeError: index building is broken"}}, matching
+
+      assert built.result == {:error, {:python, "RuntimeError: index building is broken"}},
+             matching
     end
 
     built =
@@ -8126,7 +8128,8 @@ defmodule Gralkor.GraphitiPoolTest do
     pid
     |> physical_graph_indexes(group_id)
     |> Enum.map(fn index ->
-      {index["label"], Map.new(index["types"], fn {field, kinds} -> {field, Enum.sort(kinds)} end),
+      {index["label"],
+       Map.new(index["types"], fn {field, kinds} -> {field, Enum.sort(kinds)} end),
        index["stopwords"]}
     end)
     |> Enum.sort()
