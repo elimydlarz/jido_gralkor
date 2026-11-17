@@ -3836,51 +3836,28 @@ defmodule Gralkor.GraphitiPoolTest do
     setup [:start_real_embedded_pool, :seed_standard_vector_graph]
 
     test "then the search answers with the graph library's own query under the same restrictions, through the creation-time index when an earliest creation time is supplied to a fact search",
-         %{instance: instance} do
-      found = vanished_searches(instance)
-
-      for {name, case_found} <- found do
-        assert [status, lookup, own] = case_found["sent"], name
-        assert status =~ "CALL db.indexes()", name
-        assert lookup =~ "db.idx.vector", name
-        assert own =~ "vec.cosineDistance", name
-        assert case_found["found"] == case_found["own"], name
-        assert case_found["found"] != [], name
-      end
-
-      assert found["fact since"]["sent"] |> List.last() =~ "MATCH ()-[e:RELATES_TO]->()"
-      assert found["fact since"]["sent"] |> List.last() =~ "e.created_at >= $gralkor_since"
+         context do
+      assert_vanished_search_answers_with_own_query(context)
     end
 
-    test "and the graph library's own query is sent once", %{instance: instance} do
-      for {name, case_found} <- vanished_searches(instance) do
-        assert Enum.count(case_found["sent"], &(&1 =~ "vec.cosineDistance")) == 1, name
-        assert Enum.count(case_found["sent"], &(&1 =~ "db.idx.vector")) == 1, name
-      end
+    test "and the graph library's own query is sent once", context do
+      assert_vanished_search_sends_own_query_once(context)
     end
 
-    test "and the graph library's own query carries the search's query timeout",
-         %{instance: instance} do
-      for {name, case_found} <- vanished_searches(instance) do
-        assert case_found["own_timeouts"] == [case_found["read_timeout"]], name
-      end
+    test "and the graph library's own query carries the search's query timeout", context do
+      assert_vanished_search_own_query_carries_timeout(context)
     end
   end
 
   describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > if the vector index lookup fails for any reason but the index being gone" do
     setup [:start_real_embedded_pool, :seed_standard_vector_graph]
 
-    test "then the search fails with that failure", %{instance: instance} do
-      for {kind, found} <- failed_lookup_searches(instance) do
-        assert found["error"] =~ "ResponseError: Vector dimension mismatch", kind
-      end
+    test "then the search fails with that failure", context do
+      assert_failed_lookup_fails_search(context)
     end
 
-    test "and the graph library's own query is not sent", %{instance: instance} do
-      for {kind, found} <- failed_lookup_searches(instance) do
-        assert Enum.any?(found["sent"], &(&1 =~ "db.idx.vector")), kind
-        refute Enum.any?(found["sent"], &(&1 =~ "vec.cosineDistance")), kind
-      end
+    test "and the graph library's own query is not sent", context do
+      assert_failed_lookup_sends_no_own_query(context)
     end
   end
 
