@@ -2364,10 +2364,10 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   describe "when a graph instance's indexes are built on FalkorDB > if an existing vector index compares at another dimension than the embedder produces, or by another similarity than cosine > if a query for the graph's other vector index fails in the same try" do
-    setup [:start_real_embedded_pool, :substitute_vector_index_retry_sleep]
+    setup [:start_real_embedded_pool, :substitute_index_building_retry_sleep]
 
-    test "then vector index creation is still not tried again", context do
-      assert_creation_not_tried_again_beside_mismatch_and_failure(context)
+    test "then index building is still not tried again", context do
+      assert_building_not_tried_again_beside_mismatch_and_failure(context)
     end
 
     test "and index building fails naming the mismatched index and that failure", context do
@@ -2375,29 +2375,48 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a graph instance's indexes are built on FalkorDB > if a query that reads which vector indexes the graph has, or creates one, fails, times out, loses its connection, or is answered that FalkorDB is loading" do
-    setup [:start_real_embedded_pool, :substitute_vector_index_retry_sleep]
+  describe "when a graph instance's indexes are built on FalkorDB > if any query of index building fails, times out, loses its connection, or is answered that FalkorDB is loading" do
+    setup [:start_real_embedded_pool, :substitute_index_building_retry_sleep]
 
-    test "then vector index creation is tried again after a set wait, up to a set number of times",
+    test "then index building is tried again after a set wait, up to a set number of times",
          context do
-      assert_creation_tried_again_after_set_wait_up_to_set_number_of_times(context)
+      assert_building_tried_again_after_set_wait_up_to_set_number_of_times(context)
     end
 
-    test "and the graph library's own index building, the stopword replacement, and the writer recording are not run again",
-         context do
-      assert_index_building_stopword_replacement_writer_recording_not_run_again(context)
+    test "and tries that fail at different steps count against the same limit", context do
+      assert_tries_failing_at_different_steps_share_limit(context)
     end
 
-    test "and any stopword replacement and writer recording done before it are still logged",
+    test "and a later try runs the graph library's own index building, the stopword replacement, and the writer recording again",
          context do
-      assert_replacement_and_recording_logged_beside_failed_creation(context)
+      assert_later_try_runs_every_step_again(context)
+    end
+
+    test "and the stopword replacement and writer recording that each try did are logged",
+         context do
+      assert_replacement_and_recording_of_each_try_logged(context)
     end
   end
 
-  describe "when a graph instance's indexes are built on FalkorDB > if a query that reads which vector indexes the graph has, or creates one, fails, times out, loses its connection, or is answered that FalkorDB is loading > when vector index creation is tried again" do
-    setup [:start_real_embedded_pool, :substitute_vector_index_retry_sleep]
+  describe "when a graph instance's indexes are built on FalkorDB > if any query of index building fails, times out, loses its connection, or is answered that FalkorDB is loading > when index building is tried again" do
+    setup [:start_real_embedded_pool, :substitute_index_building_retry_sleep]
 
-    test "then the try reads which vector indexes the graph has", context do
+    test "then the graph library's own index building creates only the indexes the graph lacks",
+         context do
+      assert_try_creates_only_indexes_graph_lacks(context)
+    end
+
+    test "and the stopword replacement replaces only the indexes that still carry a stopword list",
+         context do
+      assert_try_replaces_only_indexes_still_carrying_stopwords(context)
+    end
+
+    test "and the writer recording records writers only on episodes, facts, and entities still without them",
+         context do
+      assert_try_records_only_writers_still_missing(context)
+    end
+
+    test "and the try reads which vector indexes the graph has", context do
       assert_try_reads_which_vector_indexes_graph_has(context)
     end
 
@@ -2407,11 +2426,11 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a graph instance's indexes are built on FalkorDB > if a query that reads which vector indexes the graph has, or creates one, fails, times out, loses its connection, or is answered that FalkorDB is loading > when vector index creation is tried again > while a try succeeds" do
-    setup [:start_real_embedded_pool, :substitute_vector_index_retry_sleep]
+  describe "when a graph instance's indexes are built on FalkorDB > if any query of index building fails, times out, loses its connection, or is answered that FalkorDB is loading > when index building is tried again > while a try succeeds" do
+    setup [:start_real_embedded_pool, :substitute_index_building_retry_sleep]
 
-    test "then vector index creation is not tried again", context do
-      assert_creation_not_tried_again_once_try_succeeds(context)
+    test "then index building is not tried again", context do
+      assert_building_not_tried_again_once_try_succeeds(context)
     end
 
     test "and the success is logged once, naming the graph and which try succeeded", context do
@@ -2433,8 +2452,8 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a graph instance's indexes are built on FalkorDB > if a query that reads which vector indexes the graph has, or creates one, fails, times out, loses its connection, or is answered that FalkorDB is loading > when vector index creation is tried again > if a try finds a mismatched vector index" do
-    setup [:start_real_embedded_pool, :substitute_vector_index_retry_sleep]
+  describe "when a graph instance's indexes are built on FalkorDB > if any query of index building fails, times out, loses its connection, or is answered that FalkorDB is loading > when index building is tried again > if a try finds a mismatched vector index" do
+    setup [:start_real_embedded_pool, :substitute_index_building_retry_sleep]
 
     test "then no success is logged", context do
       assert_no_success_logged_when_try_finds_mismatch(context)
@@ -2445,40 +2464,24 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  describe "when a graph instance's indexes are built on FalkorDB > if a query that reads which vector indexes the graph has, or creates one, fails, times out, loses its connection, or is answered that FalkorDB is loading > when vector index creation is tried again > if every try fails" do
-    setup [:start_real_embedded_pool, :substitute_vector_index_retry_sleep]
+  describe "when a graph instance's indexes are built on FalkorDB > if any query of index building fails, times out, loses its connection, or is answered that FalkorDB is loading > when index building is tried again > if every try fails" do
+    setup [:start_real_embedded_pool, :substitute_index_building_retry_sleep]
 
-    test "then index building fails, naming the graph, how many times creation was tried, and the last failure",
+    test "then index building fails, naming the graph, how many times it was tried, and the last failure",
          context do
       assert_index_building_fails_naming_graph_tries_and_last_failure(context)
     end
 
     test "and every other graph's indexes are still built", context do
-      assert_other_graphs_built_beside_failed_creation(context)
+      assert_other_graphs_built_beside_failed_building(context)
     end
   end
 
-  describe "when a graph instance's indexes are built on FalkorDB > if creating the vector indexes fails any other way" do
-    setup [:start_real_embedded_pool, :substitute_vector_index_retry_sleep]
+  describe "when a graph instance's indexes are built on FalkorDB > if index building fails any other way, or its graph operation runs past its deadline" do
+    setup [:start_real_embedded_pool, :substitute_index_building_retry_sleep]
 
-    test "then vector index creation is not tried again", context do
-      assert_creation_not_tried_again_after_another_failure(context)
-    end
-  end
-
-  describe "when a graph instance's indexes are built on FalkorDB > if a query of the graph library's own index building, the stopword replacement, or the writer recording fails, times out, loses its connection, or is answered that FalkorDB is loading" do
-    setup [:start_real_embedded_pool, :substitute_vector_index_retry_sleep]
-
-    test "then index building fails with that failure", context do
-      assert_index_building_fails_with_earlier_failure(context)
-    end
-
-    test "and nothing is tried again", context do
-      assert_nothing_tried_again_after_earlier_failure(context)
-    end
-
-    test "and no vector index is created", context do
-      assert_no_vector_index_created_after_earlier_failure(context)
+    test "then index building is not tried again", context do
+      assert_building_not_tried_again_after_another_failure(context)
     end
   end
 
