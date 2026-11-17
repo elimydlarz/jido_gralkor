@@ -137,18 +137,17 @@ defmodule Gralkor.GraphitiPool do
               uuids=node_uuids,
           )
 
-  async def tag_in_batches(driver, cypher):
-      tagged = 0
+  async def tag_in_batches(driver, cypher, tagged, kind):
       while True:
           records, _, _ = await driver.execute_query(cypher, batch=5000)
           count = records[0]['tagged'] if records else 0
           if not count:
-              return tagged
-          tagged += count
+              return
+          tagged[kind] += count
 
-  async def backfill_writers(driver):
+  async def backfill_writers(driver, tagged):
       if not records_writers(driver):
-          return {'episodes': 0, 'facts': 0, 'entities': 0}
+          return
       records, _, _ = await driver.execute_query(
           'MATCH (e:Episodic) WHERE e._gralkor_writers IS NULL AND e.uuid IS NOT NULL '
           'RETURN e.uuid AS uuid, e.source_description AS source_description, e._gralkor_writer AS writer'
