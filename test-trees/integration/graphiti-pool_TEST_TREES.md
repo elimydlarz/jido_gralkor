@@ -278,8 +278,17 @@ when a fact or entity similarity search runs on FalkorDB
     while writers are included and few of the graph's entities are theirs
       then the entity search returns as many results as the graph library's own query returns under the same restrictions
     when the vector index is dropped
-      then the next search answers with the graph library's own query
-      and the vector index is not asked
+      while the search reads that the vector index is no longer there
+        then the search answers with the graph library's own query
+        and the vector index is not asked
+      while the search reads that the vector index is still built
+        when the vector index refuses the search's lookup because it is gone
+          then the search answers with the graph library's own query under the same restrictions, through the creation-time index when an earliest creation time is supplied to a fact search
+          and the graph library's own query is sent once
+          and the graph library's own query carries the search's query timeout
+    if the vector index lookup fails for any reason but the index being gone
+      then the search fails with that failure
+      and the graph library's own query is not sent
   while the graph's vector index for those embeddings is built but compares by another similarity than cosine, or at another dimension than the search's embedding
     then the search fails, naming the graph, the index, its similarity and dimension, and how to replace it
     and the vector index is not asked
