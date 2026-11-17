@@ -674,14 +674,15 @@ defmodule Gralkor.GraphitiPool do
                   + ',\\nscore AS gralkor_score, gralkor_reached, gralkor_trusted'
                   + '\\nORDER BY score DESC\\nLIMIT $limit'
               )
-              records, _, _ = await driver.execute_query(
+              records = await looked_up(
+                  driver,
+                  'queryNodes',
                   cypher,
                   search_vector=search_vector,
                   gralkor_k=k,
                   gralkor_trusted_share=NEAREST_TRUSTED_SHARE,
                   limit=limit,
                   min_score=min_score,
-                  routing_='r',
                   **params,
               )
               if answered(records, k, limit, min_score):
