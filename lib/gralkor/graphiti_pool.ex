@@ -538,6 +538,15 @@ defmodule Gralkor.GraphitiPool do
               + 'gralkor_reached, gralkor_trusted'
           )
 
+      async def looked_up(driver, procedure, cypher, **params):
+          try:
+              records, _, _ = await driver.execute_query(cypher, routing_='r', **params)
+          except ResponseError as error:
+              if str(error) != f"Invalid arguments for procedure 'db.idx.vector.{procedure}'":
+                  raise
+              return None
+          return records
+
       async def built_index(driver, kind, search_vector):
           index = await vector_index(driver, kind)
           if index is None or not index['built']:
