@@ -7628,51 +7628,147 @@ defmodule Gralkor.GraphitiPoolTest do
     Pythonx.decode(sent)
   end
 
-  defp assert_creation_tried_again_after_set_wait_up_to_set_number_of_times(%{pid: pid}) do
-    waits = GraphitiPool.vector_index_retry_delays_ms()
+  defp assert_building_tried_again_after_set_wait_up_to_set_number_of_times(%{pid: pid}) do
+    waits = GraphitiPool.index_building_retry_delays_ms()
 
     for {matching, failure} <- [
-          {"CREATE VECTOR INDEX", "failed"},
-          {"CREATE VECTOR INDEX", "timed out"},
-          {"CREATE VECTOR INDEX", "connection lost"},
-          {"CREATE VECTOR INDEX", "loading"},
-          {"$gralkor_label", "connection lost"}
+          {"stopwords, entitytype", "failed"},
+          {"stopwords, entitytype", "timed out"},
+          {"stopwords, entitytype", "connection lost"},
+          {"stopwords, entitytype", "loading"},
+          {"CREATE FULLTEXT INDEX", "connection lost"},
+          {"e._gralkor_writers IS NULL", "connection lost"},
+          {"$gralkor_label", "connection lost"},
+          {"CREATE VECTOR INDEX", "timed out"}
         ] do
       built = failing_build(pid, "fresh", matching, :always, failure)
 
-      assert built.waits == waits, failure
-
-      assert Enum.count(built.sent, &(&1 == "status RELATES_TO")) == length(waits) + 1,
-             failure
+      assert built.waits == waits, "#{matching}: #{failure}"
+      assert tries(built.sent) == length(waits) + 1, "#{matching}: #{failure}"
     end
   end
 
-  defp assert_index_building_stopword_replacement_writer_recording_not_run_again(%{pid: pid}) do
-    built = failing_build(pid, "fresh", "CREATE VECTOR INDEX", :always)
+  defp assert_tries_failing_at_different_steps_share_limit(%{pid: pid}) do
+    waits = GraphitiPool.index_building_retry_delays_ms()
 
-    {before_failure, [_failed | later]} =
-      Enum.split_while(built.sent, &(&1 != "create RELATES_TO"))
+    built =
+      failing_build(
+        pid,
+        "fresh",
+        [
+          "stopwords, entitytype",
+          "CREATE FULLTEXT INDEX",
+          "e._gralkor_writers IS NULL",
+          "CREATE VECTOR INDEX"
+        ],
+        :always
+      )
 
-    assert "other" in before_failure
-
-    assert Enum.count(later, &(&1 == "create RELATES_TO")) ==
-             length(GraphitiPool.vector_index_retry_delays_ms())
-
-    refute "other" in later
+    assert built.waits == waits
+    assert tries(built.sent) == length(waits) + 1
+    assert {:error, {:vector_indexes, message}} = built.result
+    assert message =~ "(tries: #{length(waits) + 1}, "
   end
 
-  defp assert_replacement_and_recording_logged_beside_failed_creation(%{pid: pid}) do
+  defp assert_later_try_runs_every_step_again(%{pid: pid}) do
+    built = failing_build(pid, "fresh", "CREATE VECTOR INDEX", 1)
+
+    {_first_try, [_failed | later]} = Enum.split_while(built.sent, &(&1 != "failed"))
+
+    assert Enum.any?(later, &(&1 =~ "CREATE INDEX FOR"))
+    assert Enum.any?(later, &(&1 =~ "CREATE FULLTEXT INDEX"))
+    assert Enum.any?(later, &(&1 =~ "stopwords, entitytype"))
+    assert Enum.any?(later, &(&1 =~ "e._gralkor_writers IS NULL"))
+  end
+
+  defp assert_replacement_and_recording_of_each_try_logged(%{pid: pid}) do
     create_stopword_indexes(%{pid: pid})
-    failing = fail_queries("stopwords", "CREATE VECTOR INDEX", :always, "connection lost")
+
+    failing =
+      fail_queries("stopwords", "UNWIND $rows AS row MATCH (e:Episodic", 1, "connection lost")
 
     log = capture_log(fn -> GraphitiPool.for(pid, "stopwords") end)
-    sent_by(failing)
+    sent = sent_by(failing)
+
+    assert tries(sent) == 2
 
     assert log =~
              "full-text indexes rebuilt without stopwords (FalkorDB #3348) — labels: Episodic"
 
     assert log =~
              "recorded writers for memory written before writers were recorded — graph: #{physical("stopwords")} episodes: 1"
+  end
+
+  defp assert_try_creates_only_indexes_graph_lacks(%{pid: pid}) do
+    GraphitiPool.for(pid, "fresh")
+    failing = fail_queries("first-use", "CREATE FULLTEXT INDEX", 1, "connection lost")
+    log = capture_log(fn -> GraphitiPool.for(pid, "first-use") end)
+    sent = sent_by(failing)
+
+    assert Enum.count(sent, &(&1 == "failed")) == 1
+    refute log =~ "failed (non-fatal)"
+    assert index_kinds(pid, "first-use") == index_kinds(pid, "fresh")
+  end
+
+  defp assert_try_replaces_only_indexes_still_carrying_stopwords(%{pid: pid}) do
+    create_stopword_indexes(%{pid: pid})
+
+    physical_graph_query(pid, "stopwords", [
+      "CREATE INDEX FOR (n:Entity) ON (n.uuid, n.group_id)",
+      "CREATE FULLTEXT INDEX FOR (n:Entity) ON (n.name, n.summary, n.group_id) OPTIONS {stopwords: ['a', 'the']}"
+    ])
+
+    failing =
+      fail_queries("stopwords", "DROP FULLTEXT INDEX FOR (n:Entity)", 1, "connection lost")
+
+    capture_log(fn -> GraphitiPool.for(pid, "stopwords") end)
+    sent = sent_by(failing)
+
+    replaced_episodic = &(&1 =~ "DROP FULLTEXT INDEX FOR (n:Episodic) ON (n.content)")
+
+    assert Enum.find_index(sent, replaced_episodic) < Enum.find_index(sent, &(&1 == "failed"))
+    assert Enum.count(sent, replaced_episodic) == 1
+
+    for index <- physical_graph_indexes(pid, "stopwords"),
+        index["label"] in ["Episodic", "Entity"] do
+      assert index["stopwords"] == [], index["label"]
+    end
+  end
+
+  defp assert_try_records_only_writers_still_missing(%{pid: pid}) do
+    seed_unrecorded_writer_graph(%{pid: pid})
+
+    failing =
+      fail_queries(
+        "history",
+        "MATCH (:Entity)-[gralkor_target:RELATES_TO]->(:Entity)",
+        1,
+        "connection lost"
+      )
+
+    instance = capture_log_result(fn -> GraphitiPool.for(pid, "history") end)
+    sent = sent_by(failing)
+
+    assert tries(sent) == 2
+    assert Enum.count(sent, &(&1 =~ "UNWIND $rows AS row MATCH (e:Episodic")) == 1
+
+    assert recorded_writers(
+             instance,
+             "MATCH ()-[e:RELATES_TO]->() RETURN e.uuid AS key, e._gralkor_writers AS writers"
+           ) == %{
+             "shared-edge" => ["lens:alpha", "direct"],
+             "reflection-edge" => ["reflection:review"],
+             "orphan-edge" => ["unknown"]
+           }
+
+    assert recorded_writers(
+             instance,
+             "MATCH (n:Entity) RETURN n.uuid AS key, n._gralkor_writers AS writers"
+           ) == %{
+             "shared-node" => ["lens:alpha", "reflection:review"],
+             "direct-node" => ["direct"],
+             "orphan-node" => ["unknown"]
+           }
   end
 
   defp assert_try_reads_which_vector_indexes_graph_has(%{pid: pid}) do
@@ -7724,23 +7820,23 @@ defmodule Gralkor.GraphitiPoolTest do
            }
   end
 
-  defp assert_creation_not_tried_again_once_try_succeeds(%{pid: pid}) do
-    built = failing_build(pid, "fresh", "CREATE VECTOR INDEX", 1)
+  defp assert_building_not_tried_again_once_try_succeeds(%{pid: pid}) do
+    built = failing_build(pid, "fresh", "stopwords, entitytype", 1, "loading")
 
-    assert built.waits == Enum.take(GraphitiPool.vector_index_retry_delays_ms(), 1)
-    assert Enum.count(built.sent, &(&1 == "create RELATES_TO")) == 2
+    assert built.waits == Enum.take(GraphitiPool.index_building_retry_delays_ms(), 1)
+    assert tries(built.sent) == 2
   end
 
   defp assert_success_logged_once_naming_graph_and_try(%{pid: pid}) do
-    retries = length(GraphitiPool.vector_index_retry_delays_ms())
-    built = failing_build(pid, "fresh", "CREATE VECTOR INDEX", retries)
+    retries = length(GraphitiPool.index_building_retry_delays_ms())
+    built = failing_build(pid, "fresh", "stopwords, entitytype", retries, "loading")
 
     assert occurrences(
              built.log,
-             "[gralkor] vector index creation succeeded on try #{retries + 1} — graph: #{physical("fresh")}"
+             "[gralkor] index building succeeded on try #{retries + 1} — graph: #{physical("fresh")}"
            ) == 1
 
-    assert occurrences(built.log, "vector index creation succeeded") == 1
+    assert occurrences(built.log, "succeeded on try") == 1
   end
 
   defp assert_indexes_tries_created_logged_together(%{pid: pid}) do
@@ -7756,40 +7852,44 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   defp assert_index_building_succeeds_after_failed_try(%{pid: pid}) do
-    built = failing_build(pid, "fresh", "CREATE VECTOR INDEX", 1)
+    for matching <- ["stopwords, entitytype", "CREATE VECTOR INDEX"] do
+      built = failing_build(pid, "fresh", matching, 1, "loading")
 
-    assert built.result == {:ok, %{status: "built"}}
+      assert built.result == {:ok, %{status: "built"}}, matching
 
-    assert vector_index_options(built.instance) == %{
-             "RELATES_TO.fact_embedding" => {"cosine", 3},
-             "Entity.name_embedding" => {"cosine", 3}
-           }
+      assert vector_index_options(built.instance) == %{
+               "RELATES_TO.fact_embedding" => {"cosine", 3},
+               "Entity.name_embedding" => {"cosine", 3}
+             },
+             matching
+    end
   end
 
   defp assert_index_building_fails_naming_graph_tries_and_last_failure(%{pid: pid}) do
-    tries = length(GraphitiPool.vector_index_retry_delays_ms()) + 1
+    tries = length(GraphitiPool.index_building_retry_delays_ms()) + 1
     built = failing_build(pid, "fresh", "CREATE VECTOR INDEX", :always)
 
     assert {:error, {:vector_indexes, message}} = built.result
 
     assert message =~
-             "graph #{physical("fresh")}: creating the vector indexes failed (tries: #{tries}, " <>
+             "graph #{physical("fresh")}: building the indexes failed (tries: #{tries}, " <>
                "last failure: redis.exceptions.ConnectionError: Connection closed by server.)"
 
-    failing = fail_queries("first-use", "CREATE VECTOR INDEX", :always, "loading")
+    failing = fail_queries("first-use", "stopwords, entitytype", :always, "loading")
     log = capture_log(fn -> GraphitiPool.for(pid, "first-use") end)
     sent_by(failing)
 
     assert log =~
              "[gralkor] build_indices_and_constraints failed (non-fatal): graph #{physical("first-use")}: " <>
-               "creating the vector indexes failed (tries: #{tries}, " <>
+               "building the indexes failed (tries: #{tries}, " <>
                "last failure: redis.exceptions.BusyLoadingError: Redis is loading the dataset in memory)"
   end
 
-  defp assert_creation_not_tried_again_beside_mismatch_and_failure(%{pid: pid}) do
+  defp assert_building_not_tried_again_beside_mismatch_and_failure(%{pid: pid}) do
     built = mismatched_failing_build(pid, "CREATE VECTOR INDEX", 1)
 
     assert built.waits == []
+    assert tries(built.sent) == 1
 
     assert vector_index_queries(built.sent) == [
              "status RELATES_TO",
@@ -7807,7 +7907,7 @@ defmodule Gralkor.GraphitiPoolTest do
              "graph #{physical("fresh")}: the RELATES_TO.fact_embedding vector index compares cosine at 4 dimensions"
 
     assert message =~
-             "graph #{physical("fresh")}: creating the vector indexes failed (tries: 1, " <>
+             "graph #{physical("fresh")}: building the indexes failed (tries: 1, " <>
                "last failure: redis.exceptions.ConnectionError: Connection closed by server.)"
   end
 
@@ -7831,8 +7931,8 @@ defmodule Gralkor.GraphitiPoolTest do
   defp assert_no_success_logged_when_try_finds_mismatch(%{pid: pid}) do
     built = mismatched_failing_build(pid, "$gralkor_label", 1)
 
-    assert built.waits == Enum.take(GraphitiPool.vector_index_retry_delays_ms(), 1)
-    refute built.log =~ "vector index creation succeeded"
+    assert built.waits == Enum.take(GraphitiPool.index_building_retry_delays_ms(), 1)
+    refute built.log =~ "succeeded on try"
   end
 
   defp assert_index_building_fails_naming_mismatch_a_try_found(%{pid: pid}) do
@@ -7843,55 +7943,10 @@ defmodule Gralkor.GraphitiPoolTest do
     assert message =~
              "graph #{physical("fresh")}: the RELATES_TO.fact_embedding vector index compares cosine at 4 dimensions"
 
-    refute message =~ "creating the vector indexes failed"
+    refute message =~ "building the indexes failed"
   end
 
-  defp earlier_failures do
-    connection_lost =
-      {:error, {:python, "redis.exceptions.ConnectionError: Connection closed by server."}}
-
-    [
-      {"stopwords, entitytype", "failed",
-       {:error, {:python, "redis.exceptions.ResponseError: Query timed out"}}},
-      {"stopwords, entitytype", "timed out", {:error, :timeout}},
-      {"stopwords, entitytype", "loading",
-       {:error,
-        {:python, "redis.exceptions.BusyLoadingError: Redis is loading the dataset in memory"}}},
-      {"stopwords, entitytype", "connection lost", connection_lost},
-      {"CREATE FULLTEXT INDEX", "connection lost", connection_lost},
-      {"e._gralkor_writers IS NULL", "connection lost", connection_lost}
-    ]
-  end
-
-  defp assert_index_building_fails_with_earlier_failure(%{pid: pid}) do
-    for {matching, failure, result} <- earlier_failures() do
-      built = failing_build(pid, "fresh", matching, :always, failure)
-
-      assert built.result == result, "#{matching}: #{failure}"
-    end
-  end
-
-  defp assert_nothing_tried_again_after_earlier_failure(%{pid: pid}) do
-    for {matching, failure, _result} <- earlier_failures() do
-      built = failing_build(pid, "fresh", matching, :always, failure)
-
-      assert built.waits == [], "#{matching}: #{failure}"
-      assert Enum.count(built.sent, &(&1 == "failed")) == 1, "#{matching}: #{failure}"
-      assert List.last(built.sent) == "failed", "#{matching}: #{failure}"
-    end
-  end
-
-  defp assert_no_vector_index_created_after_earlier_failure(%{pid: pid}) do
-    for {matching, failure, _result} <- earlier_failures() do
-      built = failing_build(pid, "fresh", matching, :always, failure)
-
-      assert vector_index_queries(built.sent) == [], "#{matching}: #{failure}"
-
-      assert vector_index_options(built.instance) == %{}, "#{matching}: #{failure}"
-    end
-  end
-
-  defp assert_other_graphs_built_beside_failed_creation(%{pid: pid}) do
+  defp assert_other_graphs_built_beside_failed_building(%{pid: pid}) do
     others = ["other-1", "other-2", "other-3"]
 
     for group <- others do
@@ -7900,7 +7955,7 @@ defmodule Gralkor.GraphitiPoolTest do
       |> graph_query("DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)")
     end
 
-    failing_build(pid, "fresh", "CREATE VECTOR INDEX", :always)
+    failing_build(pid, "fresh", "stopwords, entitytype", :always)
 
     for group <- others do
       assert vector_index_options(GraphitiPool.for(pid, group))["Entity.name_embedding"] ==
@@ -7909,50 +7964,80 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
-  defp assert_creation_not_tried_again_after_another_failure(%{pid: pid}) do
-    built = failing_build(pid, "fresh", "CREATE VECTOR INDEX", :always, "another way")
+  defp assert_building_not_tried_again_after_another_failure(%{pid: pid}) do
+    for matching <- ["stopwords, entitytype", "CREATE VECTOR INDEX"] do
+      built = failing_build(pid, "fresh", matching, :always, "another way")
+
+      assert built.waits == [], matching
+      assert tries(built.sent) == 1, matching
+      assert built.result == {:error, {:python, "RuntimeError: index building is broken"}}, matching
+    end
+
+    built =
+      within_graph_operation_deadline(0.5, fn ->
+        failing_build(pid, "fresh", "stopwords, entitytype", 1, "past the deadline")
+      end)
 
     assert built.waits == []
-    assert vector_index_queries(built.sent) == ["status RELATES_TO", "create RELATES_TO"]
-    assert built.result == {:error, {:python, "RuntimeError: vector index creation is broken"}}
+    assert tries(built.sent) == 1
+    assert built.result == {:error, :timeout}
   end
 
-  defp substitute_vector_index_retry_sleep(_context \\ %{}) do
-    test_pid = self()
-    previous = Application.get_env(:jido_gralkor, :vector_index_retry_sleep)
+  defp within_graph_operation_deadline(seconds, fun) do
+    {previous, _} = Pythonx.eval("import asyncio\nasyncio._gralkor_deadline_seconds", %{})
 
-    Application.put_env(:jido_gralkor, :vector_index_retry_sleep, fn ms ->
-      send(test_pid, {:vector_index_retry_sleep, ms})
+    Pythonx.eval("import asyncio\nasyncio._gralkor_deadline_seconds = seconds\nNone", %{
+      "seconds" => seconds
+    })
+
+    try do
+      fun.()
+    after
+      Pythonx.eval("import asyncio\nasyncio._gralkor_deadline_seconds = previous\nNone", %{
+        "previous" => previous
+      })
+    end
+  end
+
+  defp substitute_index_building_retry_sleep(_context \\ %{}) do
+    test_pid = self()
+    previous = Application.get_env(:jido_gralkor, :index_building_retry_sleep)
+
+    Application.put_env(:jido_gralkor, :index_building_retry_sleep, fn ms ->
+      send(test_pid, {:index_building_retry_sleep, ms})
     end)
 
     on_exit(fn ->
       if previous do
-        Application.put_env(:jido_gralkor, :vector_index_retry_sleep, previous)
+        Application.put_env(:jido_gralkor, :index_building_retry_sleep, previous)
       else
-        Application.delete_env(:jido_gralkor, :vector_index_retry_sleep)
+        Application.delete_env(:jido_gralkor, :index_building_retry_sleep)
       end
     end)
 
     :ok
   end
 
-  defp vector_index_retry_waits(waits \\ []) do
+  defp index_building_retry_waits(waits \\ []) do
     receive do
-      {:vector_index_retry_sleep, ms} -> vector_index_retry_waits(waits ++ [ms])
+      {:index_building_retry_sleep, ms} -> index_building_retry_waits(waits ++ [ms])
     after
       0 -> waits
     end
   end
 
   # Until `sent_by/1` or the test's exit, the FalkorDB client fails the group's
-  # queries holding `matching` the first `times` times, as `failure` names, and
-  # records each query the group's graph is sent: a read of whether a vector
-  # index exists, the creation of one, or another query, followed by `failed`
-  # when it failed that query.
+  # queries as `failure` names, the first `times` times one holds `matching`;
+  # a list of patterns names, in order, the query each failure waits for, its
+  # last pattern serving every later failure. It records each query the group's
+  # graph is sent: a read of whether a vector index exists (`status <label>`),
+  # the creation of one (`create <label>`), or else the query itself, followed
+  # by `failed` when it failed that query.
   defp fail_queries(group_id, matching, times, failure) do
     {failing, _} =
       Pythonx.eval(
         """
+        import asyncio
         import redis.exceptions
         from falkordb.asyncio.graph import AsyncGraph
 
@@ -7963,12 +8048,13 @@ defmodule Gralkor.GraphitiPoolTest do
                 'connection lost': lambda: redis.exceptions.ConnectionError('Connection closed by server.'),
                 'loading': lambda: redis.exceptions.BusyLoadingError('Redis is loading the dataset in memory'),
                 'answer not awaited': lambda: redis.exceptions.TimeoutError('Timeout reading from socket'),
-                'another way': lambda: RuntimeError('vector index creation is broken'),
+                'another way': lambda: RuntimeError('index building is broken'),
             }
 
             def __init__(self, name, matching, times, failure):
                 self.sent = []
                 self.left = times
+                self.matching = matching
                 self.original = AsyncGraph._query
                 failing = self
 
@@ -7979,11 +8065,15 @@ defmodule Gralkor.GraphitiPoolTest do
                     if graph.name != name:
                         return await answered()
                     failing.sent.append(failing.described(q, params))
-                    if matching in q and failing.left > 0:
+                    if failing.left > 0 and failing.matching[0] in q:
                         failing.left -= 1
+                        if len(failing.matching) > 1:
+                            failing.matching = failing.matching[1:]
                         if failure == 'answer not awaited':
                             await answered()
                         failing.sent.append('failed')
+                        if failure == 'past the deadline':
+                            await asyncio.sleep(3600)
                         raise failing.RAISED[failure]()
                     return await answered()
 
@@ -7996,17 +8086,22 @@ defmodule Gralkor.GraphitiPoolTest do
                     return 'status ' + label
                 if q.startswith('CREATE VECTOR INDEX'):
                     return 'create ' + ('RELATES_TO' if 'RELATES_TO' in q else 'Entity')
-                return 'other'
+                return q
 
             def restore(self):
                 from falkordb.asyncio.graph import AsyncGraph
                 AsyncGraph._query = self.original
 
-        _FailingQueries(group_id.decode('utf-8'), matching.decode('utf-8'), times, failure.decode('utf-8'))
+        _FailingQueries(
+            group_id.decode('utf-8'),
+            [pattern.decode('utf-8') for pattern in matching],
+            times,
+            failure.decode('utf-8'),
+        )
         """,
         %{
           "group_id" => physical(group_id),
-          "matching" => matching,
+          "matching" => List.wrap(matching),
           "times" => if(times == :always, do: 1_000_000, else: times),
           "failure" => failure
         }
@@ -8021,7 +8116,20 @@ defmodule Gralkor.GraphitiPoolTest do
     Pythonx.decode(sent)
   end
 
-  defp vector_index_queries(sent), do: Enum.reject(sent, &(&1 in ["other", "failed"]))
+  defp vector_index_queries(sent),
+    do: Enum.filter(sent, &String.starts_with?(&1, ["status ", "create "]))
+
+  defp tries(sent), do: Enum.count(sent, &(&1 =~ "stopwords, entitytype"))
+
+  defp index_kinds(pid, group_id) do
+    pid
+    |> physical_graph_indexes(group_id)
+    |> Enum.map(fn index ->
+      {index["label"], Map.new(index["types"], fn {field, kinds} -> {field, Enum.sort(kinds)} end),
+       index["stopwords"]}
+    end)
+    |> Enum.sort()
+  end
 
   defp occurrences(text, part), do: length(String.split(text, part)) - 1
 
@@ -8060,7 +8168,7 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   defp build_while_failing(pid, instance, group_id, matching, times, failure) do
-    vector_index_retry_waits()
+    index_building_retry_waits()
     failing = fail_queries(group_id, matching, times, failure)
     parent = self()
     log = capture_log(fn -> send(parent, {:built, GraphitiPool.build_indices(pid)}) end)
@@ -8071,7 +8179,7 @@ defmodule Gralkor.GraphitiPoolTest do
       result: result,
       log: log,
       sent: sent,
-      waits: vector_index_retry_waits(),
+      waits: index_building_retry_waits(),
       instance: instance
     }
   end
