@@ -8367,6 +8367,49 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  defp assert_vanished_search_answers_with_own_query(%{instance: instance}) do
+    found = vanished_searches(instance)
+
+    for {name, case_found} <- found do
+      assert [status, lookup, own] = case_found["sent"], name
+      assert status =~ "CALL db.indexes()", name
+      assert lookup =~ "db.idx.vector", name
+      assert own =~ "vec.cosineDistance", name
+      assert case_found["found"] == case_found["own"], name
+      assert case_found["found"] != [], name
+    end
+
+    own_since = List.last(found["fact since"]["sent"])
+    assert own_since =~ "MATCH ()-[e:RELATES_TO]->()"
+    assert own_since =~ "e.created_at >= $gralkor_since"
+  end
+
+  defp assert_vanished_search_sends_own_query_once(%{instance: instance}) do
+    for {name, found} <- vanished_searches(instance) do
+      assert Enum.count(found["sent"], &(&1 =~ "vec.cosineDistance")) == 1, name
+      assert Enum.count(found["sent"], &(&1 =~ "db.idx.vector")) == 1, name
+    end
+  end
+
+  defp assert_vanished_search_own_query_carries_timeout(%{instance: instance}) do
+    for {name, found} <- vanished_searches(instance) do
+      assert found["own_timeouts"] == [found["read_timeout"]], name
+    end
+  end
+
+  defp assert_failed_lookup_fails_search(%{instance: instance}) do
+    for {kind, found} <- failed_lookup_searches(instance) do
+      assert found["error"] =~ "ResponseError: Vector dimension mismatch", kind
+    end
+  end
+
+  defp assert_failed_lookup_sends_no_own_query(%{instance: instance}) do
+    for {kind, found} <- failed_lookup_searches(instance) do
+      assert Enum.any?(found["sent"], &(&1 =~ "db.idx.vector")), kind
+      refute Enum.any?(found["sent"], &(&1 =~ "vec.cosineDistance")), kind
+    end
+  end
+
   defp assert_mismatched_search_fails_naming_index(%{instance: instance}) do
     found = mismatched_search(instance)
 
