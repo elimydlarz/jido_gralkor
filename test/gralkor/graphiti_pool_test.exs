@@ -4460,17 +4460,17 @@ defmodule Gralkor.GraphitiPoolTest do
     """)
   end
 
+  # Drops each vector index in turn and searches once FalkorDB no longer lists
+  # it: a large index is still listed as built, and still answers, for a while
+  # after its drop returns.
   defp dropped_search(instance) do
-    similarity_run(instance, """
-    DROPS = {
-        'fact': 'DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)',
-        'entity': 'DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)',
-    }
+    similarity_run(instance, @vector_index_listing <> """
     async def run():
         found = {}
         for kind in ('fact', 'entity'):
             _, before = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
             await g.driver.execute_query(DROPS[kind])
+            await until_listed(kind, False)
             results, after = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
             found[kind] = {
                 'before': [entry['cypher'] for entry in before],
