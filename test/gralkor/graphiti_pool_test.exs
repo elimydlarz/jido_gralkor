@@ -4438,8 +4438,9 @@ defmodule Gralkor.GraphitiPoolTest do
   end
 
   # Searches as the started pool wraps the search while each vector index is
-  # dropped, and with `replacement` created again, just after the search reads
-  # that it is built and before the search asks it, recording what the search
+  # dropped until FalkorDB no longer lists it, and with `replacement` created
+  # again and built, just after the search reads that it is built and before
+  # the search asks it, recording what the search
   # sends and the query timeout of each query, and searches as the graph
   # library does once the index is gone.
   @vanishing_python """
@@ -4454,8 +4455,9 @@ defmodule Gralkor.GraphitiPoolTest do
           records = await original(cypher, **params)
           if cypher.startswith('CALL db.indexes()') and 'gralkor_label' in params:
               await original(DROPS[kind])
+              await until_listed(kind, False, execute=original)
               if replacement:
-                  await original(replacement)
+                  await until_listed(kind, True, replacement, original)
           return records
       timeouts = []
       own_query = AsyncGraph._query
@@ -4502,16 +4504,17 @@ defmodule Gralkor.GraphitiPoolTest do
   }
   FIELDS = {'fact': ('RELATES_TO', 'fact_embedding'), 'entity': ('Entity', 'name_embedding')}
 
-  async def until_listed(kind, built):
+  async def until_listed(kind, built, create=None, execute=None):
       label, field = FIELDS[kind]
+      execute = execute or g.driver.execute_query
       for _ in range(500):
-          records, _, _ = await g.driver.execute_query(
+          records, _, _ = await execute(
               'CALL db.indexes() YIELD label, types, status WHERE label = $label RETURN types, status', label=label)
           statuses = [record['status'] for record in records if 'VECTOR' in (record['types'].get(field) or [])]
           if statuses == (['OPERATIONAL'] if built else []):
               return
           if built and not statuses:
-              await g.driver.execute_query(CREATES[kind])
+              await execute(create or CREATES[kind])
           await asyncio.sleep(0.01)
       raise RuntimeError(f'the {kind} vector index never became ' + ('built' if built else 'unlisted'))
   """
@@ -4560,9 +4563,11 @@ defmodule Gralkor.GraphitiPoolTest do
     )
   end
 
-  # A vector index created again at another dimension between the search's
-  # status read and its lookup: FalkorDB refuses the lookup for its dimension,
-  # not because the index is gone.
+  # A vector index created again at another dimension, and built, between the
+  # search's status read and its lookup: FalkorDB refuses the lookup for its
+  # dimension, not because the index is gone. An index still being built
+  # refuses a lookup as one that is gone does, so the replacement is built
+  # before the lookup.
   defp failed_lookup_searches(instance) do
     similarity_run(
       instance,
