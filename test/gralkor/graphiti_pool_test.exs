@@ -2330,8 +2330,8 @@ defmodule Gralkor.GraphitiPoolTest do
       assert_index_building_fails_naming_graph_index_dimension_similarity(context)
     end
 
-    test "and vector index creation is not tried again", %{pid: pid} do
-      substitute_vector_index_retry_sleep()
+    test "and index building is not tried again", %{pid: pid} do
+      substitute_index_building_retry_sleep()
       instance = GraphitiPool.for(pid, "fresh")
       drop_vector_indexes(instance)
 
