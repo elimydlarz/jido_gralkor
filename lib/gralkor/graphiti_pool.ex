@@ -545,7 +545,7 @@ defmodule Gralkor.GraphitiPool do
           try:
               records, _, _ = await driver.execute_query(cypher, routing_='r', **params)
           except ResponseError as error:
-              if str(error) == f"never":
+              if str(error) != f"Invalid arguments for procedure 'db.idx.vector.{procedure}'":
                   raise
               return None
           return records
