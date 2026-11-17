@@ -248,7 +248,7 @@ defmodule Gralkor.GraphitiPool do
           f"no longer lists it, and build the graph's indexes again"
       )
 
-  async def create_vector_indexes(g):
+  async def create_vector_indexes(g, progress):
       driver = getattr(g, 'driver', None)
       embedder = getattr(g, 'embedder', None)
       if (
@@ -256,45 +256,28 @@ defmodule Gralkor.GraphitiPool do
           or getattr(driver, 'search_interface', None)
           or embedder is None
       ):
-          return {
-              'created': [], 'found': [], 'unanswered': None,
-              'dimension': None, 'mismatched': [], 'failed': None,
-          }
+          return
       dimension = int(embedder.config.embedding_dim)
-      created = []
-      found = []
-      unanswered = None
-      mismatched = []
-      failed = None
-      try:
-          for kind in ('fact', 'entity'):
-              spec = VECTOR_INDEXES[kind]
-              name = spec['label'] + '.' + spec['field']
-              index = await vector_index(driver, kind)
-              if index is None:
-                  unanswered = name
-                  result = await driver.execute_query(
-                      'CREATE VECTOR INDEX FOR ' + spec['pattern']
-                      + ' OPTIONS {dimension: ' + str(dimension) + ", similarityFunction: 'cosine'}"
-                  )
-                  unanswered = None
-                  if result is not None:
-                      created.append(name)
+      progress['dimension'] = dimension
+      for kind in ('fact', 'entity'):
+          spec = VECTOR_INDEXES[kind]
+          name = spec['label'] + '.' + spec['field']
+          index = await vector_index(driver, kind)
+          if index is None:
+              progress['unanswered'] = name
+              result = await driver.execute_query(
+                  'CREATE VECTOR INDEX FOR ' + spec['pattern']
+                  + ' OPTIONS {dimension: ' + str(dimension) + ", similarityFunction: 'cosine'}"
+              )
+              progress['unanswered'] = None
+              if result is not None:
+                  progress['created'].append(name)
+          else:
+              mismatch = vector_index_mismatch(driver, kind, index, dimension)
+              if mismatch:
+                  progress['mismatched'].append(mismatch)
               else:
-                  mismatch = vector_index_mismatch(driver, kind, index, dimension)
-                  if mismatch:
-                      mismatched.append(mismatch)
-                  else:
-                      found.append(name)
-      except redis.exceptions.RedisError as error:
-          failed = (
-              f"{type(error).__module__}.{type(error).__qualname__}: "
-              f"{(str(error).splitlines() or [''])[0]}"
-          )
-      return {
-          'created': created, 'found': found, 'unanswered': unanswered,
-          'dimension': dimension, 'mismatched': mismatched, 'failed': failed,
-      }
+                  progress['found'].append(name)
   """
 
   # graphiti-core 0.31.2's SearchFilters has no writer filter, its episode
