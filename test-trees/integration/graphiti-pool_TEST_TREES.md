@@ -320,21 +320,25 @@ when a graph instance's indexes are built on FalkorDB
     then it is left unchanged
     and a vector index the graph lacks is still created
     and index building fails, naming the graph, the index, its dimension and similarity, the embedder's dimension, and how to replace it
-    and vector index creation is not tried again
+    and index building is not tried again
     and any stopword replacement and writer recording done before it are still logged
     and every other graph's indexes are still built
     if a query for the graph's other vector index fails in the same try
-      then vector index creation is still not tried again
+      then index building is still not tried again
       and index building fails naming the mismatched index and that failure
-  if a query that reads which vector indexes the graph has, or creates one, fails, times out, loses its connection, or is answered that FalkorDB is loading
-    then vector index creation is tried again after a set wait, up to a set number of times
-    and the graph library's own index building, the stopword replacement, and the writer recording are not run again
-    and any stopword replacement and writer recording done before it are still logged
-    when vector index creation is tried again
-      then the try reads which vector indexes the graph has
+  if any query of index building fails, times out, loses its connection, or is answered that FalkorDB is loading
+    then index building is tried again after a set wait, up to a set number of times
+    and tries that fail at different steps count against the same limit
+    and a later try runs the graph library's own index building, the stopword replacement, and the writer recording again
+    and the stopword replacement and writer recording that each try did are logged
+    when index building is tried again
+      then the graph library's own index building creates only the indexes the graph lacks
+      and the stopword replacement replaces only the indexes that still carry a stopword list
+      and the writer recording records writers only on episodes, facts, and entities still without them
+      and the try reads which vector indexes the graph has
       and the try creates only the vector indexes the graph lacks, so one that a failed try created, or that FalkorDB created for a query its client stopped waiting for, is not created twice
       while a try succeeds
-        then vector index creation is not tried again
+        then index building is not tried again
         and the success is logged once, naming the graph and which try succeeded
         and the vector indexes that the tries created are logged together, naming the graph, each index created, and its dimension
         and a vector index that FalkorDB created for a query its client stopped waiting for is logged among them
@@ -343,14 +347,10 @@ when a graph instance's indexes are built on FalkorDB
         then no success is logged
         and index building fails naming the mismatched index
       if every try fails
-        then index building fails, naming the graph, how many times creation was tried, and the last failure
+        then index building fails, naming the graph, how many times it was tried, and the last failure
         and every other graph's indexes are still built
-  if creating the vector indexes fails any other way
-    then vector index creation is not tried again
-  if a query of the graph library's own index building, the stopword replacement, or the writer recording fails, times out, loses its connection, or is answered that FalkorDB is loading
-    then index building fails with that failure
-    and nothing is tried again
-    and no vector index is created
+  if index building fails any other way, or its graph operation runs past its deadline
+    then index building is not tried again
   while a label's index already carries a stopword list
     then every index on that label is dropped and recreated with the same fields and no stopword list
     and the replacement is logged naming the label
