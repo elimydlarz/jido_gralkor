@@ -191,6 +191,7 @@ defmodule Gralkor.GraphitiPool do
                           end)
 
   @vector_indexes """
+  import redis.exceptions
   from graphiti_core.driver.driver import GraphProvider
   VECTOR_INDEXES = {
       'fact': {'entitytype': 'RELATIONSHIP', 'label': 'RELATES_TO', 'field': 'fact_embedding',
@@ -251,25 +252,45 @@ defmodule Gralkor.GraphitiPool do
           or getattr(driver, 'search_interface', None)
           or embedder is None
       ):
-          return {'created': [], 'dimension': None, 'mismatched': []}
+          return {
+              'created': [], 'found': [], 'unanswered': None,
+              'dimension': None, 'mismatched': [], 'failed': None,
+          }
       dimension = int(embedder.config.embedding_dim)
       created = []
+      found = []
+      unanswered = None
       mismatched = []
-      for kind in ('fact', 'entity'):
-          spec = VECTOR_INDEXES[kind]
-          index = await vector_index(driver, kind)
-          if index is None:
-              result = await driver.execute_query(
-                  'CREATE VECTOR INDEX FOR ' + spec['pattern']
-                  + ' OPTIONS {dimension: ' + str(dimension) + ", similarityFunction: 'cosine'}"
-              )
-              if result is not None:
-                  created.append(spec['label'] + '.' + spec['field'])
-          else:
-              mismatch = vector_index_mismatch(driver, kind, index, dimension)
-              if mismatch:
-                  mismatched.append(mismatch)
-      return {'created': created, 'dimension': dimension, 'mismatched': mismatched}
+      failed = None
+      try:
+          for kind in ('fact', 'entity'):
+              spec = VECTOR_INDEXES[kind]
+              name = spec['label'] + '.' + spec['field']
+              index = await vector_index(driver, kind)
+              if index is None:
+                  unanswered = name
+                  result = await driver.execute_query(
+                      'CREATE VECTOR INDEX FOR ' + spec['pattern']
+                      + ' OPTIONS {dimension: ' + str(dimension) + ", similarityFunction: 'cosine'}"
+                  )
+                  unanswered = None
+                  if result is not None:
+                      created.append(name)
+              else:
+                  mismatch = vector_index_mismatch(driver, kind, index, dimension)
+                  if mismatch:
+                      mismatched.append(mismatch)
+                  else:
+                      found.append(name)
+      except redis.exceptions.RedisError as error:
+          failed = (
+              f"{type(error).__module__}.{type(error).__qualname__}: "
+              f"{(str(error).splitlines() or [''])[0]}"
+          )
+      return {
+          'created': created, 'found': found, 'unanswered': unanswered,
+          'dimension': dimension, 'mismatched': mismatched, 'failed': failed,
+      }
   """
 
   # graphiti-core 0.31.2's SearchFilters has no writer filter, its episode
@@ -2232,32 +2253,26 @@ defmodule Gralkor.GraphitiPool do
     end
   end
 
+  @vector_index_retry_delays_ms [1_000, 2_000, 4_000]
+
+  @doc false
+  @spec vector_index_retry_delays_ms() :: [pos_integer()]
+  def vector_index_retry_delays_ms, do: @vector_index_retry_delays_ms
+
   @doc false
   @spec initialise_instance(any()) :: :ok | {:error, {:vector_indexes, String.t()}}
   def initialise_instance(instance) do
-    %{
-      "replaced" => replaced,
-      "tagged" => tagged,
-      "graph" => graph,
-      "vector_indexes" => %{
-        "created" => created,
-        "dimension" => dimension,
-        "mismatched" => mismatched
-      }
-    } =
+    %{"replaced" => replaced, "tagged" => tagged, "graph" => graph} =
       """
       #{@writer_recording}
-      #{@vector_indexes}
       async def initialise():
           await g.build_indices_and_constraints()
           driver = getattr(g, 'driver', None)
           tagged = await backfill_writers(driver)
-          vector_indexes = await create_vector_indexes(g)
           return {
               'replaced': list(getattr(driver, '_gralkor_replaced_stopword_indexes', None) or []),
               'tagged': tagged,
               'graph': str(getattr(driver, '_database', None)),
-              'vector_indexes': vector_indexes,
           }
       initialise()
       """
@@ -2280,6 +2295,9 @@ defmodule Gralkor.GraphitiPool do
       )
     end
 
+    %{created: created, dimension: dimension, problems: problems} =
+      create_vector_indexes(instance, graph, @vector_index_retry_delays_ms, [], [])
+
     if created != [] do
       Logger.info(
         "[gralkor] vector indexes created — graph: #{graph} indexes: #{Enum.join(created, ", ")} " <>
@@ -2288,9 +2306,56 @@ defmodule Gralkor.GraphitiPool do
       )
     end
 
-    case mismatched do
+    case problems do
       [] -> :ok
-      _ -> {:error, {:vector_indexes, Enum.join(mismatched, "; ")}}
+      _ -> {:error, {:vector_indexes, Enum.join(problems, "; ")}}
+    end
+  end
+
+  # FalkorDB's client sends each query once, so this is the layer that tries a
+  # failed creation again. Each try starts from the indexes the graph has. An
+  # index found after its creation went unanswered counts as created.
+  defp create_vector_indexes(instance, graph, delays, created, unanswered) do
+    %{
+      "created" => now_created,
+      "found" => found,
+      "unanswered" => now_unanswered,
+      "dimension" => dimension,
+      "mismatched" => mismatched,
+      "failed" => failed
+    } =
+      """
+      #{@vector_indexes}
+      create_vector_indexes(g)
+      """
+      |> Gralkor.Python.run_coroutine(%{"g" => instance})
+      |> Pythonx.decode()
+
+    created = created ++ Enum.filter(found, &(&1 in unanswered)) ++ now_created
+    unanswered = (unanswered -- found) ++ List.wrap(now_unanswered)
+    try_number = length(@vector_index_retry_delays_ms) - length(delays) + 1
+
+    case {failed, mismatched, delays} do
+      {nil, _mismatched, _delays} ->
+        if try_number > 1 and mismatched == [] do
+          Logger.info(
+            "[gralkor] vector index creation succeeded on try #{try_number} — graph: #{graph}"
+          )
+        end
+
+        %{created: created, dimension: dimension, problems: mismatched}
+
+      {_failure, [], [delay | later_delays]} ->
+        Application.get_env(:jido_gralkor, :vector_index_retry_sleep, &Process.sleep/1).(delay)
+        create_vector_indexes(instance, graph, later_delays, created, unanswered)
+
+      {failure, _mismatched, _delays} ->
+        failed_creation =
+          "graph #{graph}: creating the vector indexes failed (tries: #{try_number}, last failure: " <>
+            "#{failure}); fact and entity similarity searches compare every fact or entity " <>
+            "until the graph's indexes are built again"
+
+        %{created: created, dimension: dimension, problems: mismatched ++ [failed_creation]}
     end
   end
 
