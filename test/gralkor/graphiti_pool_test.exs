@@ -4483,6 +4483,111 @@ defmodule Gralkor.GraphitiPoolTest do
     """)
   end
 
+  # Searches as the started pool wraps the search while each vector index is
+  # dropped, and with `replacement` created again, just after the search reads
+  # that it is built and before the search asks it, recording what the search
+  # sends and the query timeout of each query, and searches as the graph
+  # library does once the index is gone.
+  @vanishing_python """
+  from falkordb.asyncio.graph import AsyncGraph
+
+  READ_TIMEOUT = 4321
+
+  async def vanishing(kind, restriction, replacement=None):
+      await until_listed(kind, True)
+      original = g.driver.execute_query
+      async def dropping_after_status(cypher, **params):
+          records = await original(cypher, **params)
+          if cypher.startswith('CALL db.indexes()') and 'gralkor_label' in params:
+              await original(DROPS[kind])
+              if replacement:
+                  await original(replacement)
+          return records
+      timeouts = []
+      own_query = AsyncGraph._query
+      async def timed(graph, q, params=None, timeout=None, read_only=False):
+          timeouts.append([q, timeout])
+          return await own_query(graph, q, params=params, timeout=timeout, read_only=read_only)
+      AsyncGraph._query = timed
+      token = search_utils._gralkor_read_timeout.set(READ_TIMEOUT)
+      g.driver.execute_query = dropping_after_status
+      async def call():
+          try:
+              return await search(kind, restriction, 4, 0.6)
+          except Exception as error:
+              return type(error).__name__ + ': ' + str(error)
+      try:
+          found, sent = await recorded(call)
+      finally:
+          del g.driver.execute_query
+          search_utils._gralkor_read_timeout.reset(token)
+          AsyncGraph._query = own_query
+      result = {
+          'sent': [entry['cypher'] for entry in sent],
+          'own_timeouts': [timeout for q, timeout in timeouts if 'vec.cosineDistance' in q],
+          'read_timeout': READ_TIMEOUT,
+      }
+      if isinstance(found, str):
+          result['error'] = found
+      else:
+          result['found'] = found
+          result['own'] = await search(kind, restriction, 4, 0.6, wrapped=False)
+      return result
+  """
+
+  @vector_index_listing """
+  import asyncio
+
+  DROPS = {
+      'fact': 'DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)',
+      'entity': 'DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)',
+  }
+  CREATES = {
+      'fact': "CREATE VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding) OPTIONS {dimension: 3, similarityFunction: 'cosine'}",
+      'entity': "CREATE VECTOR INDEX FOR (n:Entity) ON (n.name_embedding) OPTIONS {dimension: 3, similarityFunction: 'cosine'}",
+  }
+  FIELDS = {'fact': ('RELATES_TO', 'fact_embedding'), 'entity': ('Entity', 'name_embedding')}
+
+  async def until_listed(kind, built):
+      label, field = FIELDS[kind]
+      for _ in range(500):
+          records, _, _ = await g.driver.execute_query(
+              'CALL db.indexes() YIELD label, types, status WHERE label = $label RETURN types, status', label=label)
+          statuses = [record['status'] for record in records if 'VECTOR' in (record['types'].get(field) or [])]
+          if statuses == (['OPERATIONAL'] if built else []):
+              return
+          if built and not statuses:
+              await g.driver.execute_query(CREATES[kind])
+          await asyncio.sleep(0.01)
+      raise RuntimeError(f'the {kind} vector index never became ' + ('built' if built else 'unlisted'))
+  """
+
+  defp vanished_searches(instance) do
+    similarity_run(instance, @vector_index_listing <> @vanishing_python <> """
+    async def run():
+        return {
+            'fact since': await vanishing('fact', Filters(since='2026-01-20T00:00:00Z', writers=['lens:*'])),
+            'fact': await vanishing('fact', SearchFilters()),
+            'entity': await vanishing('entity', Filters(writers=['direct'])),
+        }
+    run()
+    """)
+  end
+
+  # A vector index created again at another dimension between the search's
+  # status read and its lookup: FalkorDB refuses the lookup for its dimension,
+  # not because the index is gone.
+  defp failed_lookup_searches(instance) do
+    similarity_run(instance, @vector_index_listing <> @vanishing_python <> """
+    async def run():
+        return {
+            kind: await vanishing(kind, SearchFilters(), CREATES[kind].replace('dimension: 3', 'dimension: 4'))
+            for kind in ('fact', 'entity')
+        }
+    run()
+    """)
+  end
+
   defp mismatched_search(instance) do
     graph_query(instance, "DROP VECTOR INDEX FOR ()-[e:RELATES_TO]-() ON (e.fact_embedding)")
     graph_query(instance, "DROP VECTOR INDEX FOR (n:Entity) ON (n.name_embedding)")
