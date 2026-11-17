@@ -844,10 +844,10 @@ defmodule Gralkor.GraphitiPool do
                       f'CREATE FULLTEXT INDEX FOR (n:{label}) ON ({fields}) OPTIONS {{stopwords: []}}'
                   )
               replaced.append(label)
-          return replaced
 
       async def build_indices_and_constraints(self, delete_existing=False):
-          self._gralkor_replaced_stopword_indexes = await replace_stopword_indexes(self)
+          self._gralkor_replaced_stopword_indexes = []
+          await replace_stopword_indexes(self, self._gralkor_replaced_stopword_indexes)
           await original_build(self, delete_existing)
 
       get_fulltext_indices._gralkor_original = original_fulltext_indices
