@@ -304,7 +304,9 @@ defmodule Gralkor.GraphitiPool do
   #   for and the last result kept, or with fewer results than the search keeps
   #   any candidate above the minimum, lies beyond the nearest share of them,
   #   where the index's ranking is least exact, or when nothing passed, or when
-  #   fewer passed from an index that gave fewer candidates than asked for;
+  #   fewer passed from an index that gave fewer candidates than asked for,
+  #   or when FalkorDB refuses the lookup because the index is gone (a dropped
+  #   index is still listed as built until its drop finishes);
   # * a built vector index at another similarity or dimension fails the search;
   # * fact searches that name facts or their entities never ask the index;
   # * entity similarity search is wrapped where ingestion's entity
