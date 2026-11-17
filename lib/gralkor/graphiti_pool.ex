@@ -157,27 +157,32 @@ defmodule Gralkor.GraphitiPool do
           for record in records
       ]
       for start in range(0, len(rows), 1000):
+          batch = rows[start:start + 1000]
           await driver.execute_query(
               'UNWIND $rows AS row MATCH (e:Episodic {uuid: row.uuid}) SET e._gralkor_writers = [row.writer]',
-              rows=rows[start:start + 1000],
+              rows=batch,
           )
-      facts = await tag_in_batches(
+          tagged['episodes'] += len(batch)
+      await tag_in_batches(
           driver,
           '''
           MATCH (:Entity)-[gralkor_target:RELATES_TO]->(:Entity)
           WHERE gralkor_target._gralkor_writers IS NULL
           WITH gralkor_target LIMIT $batch
           ''' + GRALKOR_EDGE_WRITERS,
+          tagged,
+          'facts',
       )
-      entities = await tag_in_batches(
+      await tag_in_batches(
           driver,
           '''
           MATCH (gralkor_target:Entity)
           WHERE gralkor_target._gralkor_writers IS NULL
           WITH gralkor_target LIMIT $batch
           ''' + GRALKOR_NODE_WRITERS,
+          tagged,
+          'entities',
       )
-      return {'episodes': len(rows), 'facts': facts, 'entities': entities}
   """
 
   @pyproject_path Path.join([__DIR__, "..", "..", "priv", "python", "pyproject.toml"])
