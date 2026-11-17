@@ -322,6 +322,7 @@ defmodule Gralkor.GraphitiPool do
       import inspect
       from datetime import timezone
       from pydantic import AwareDatetime
+      from redis.exceptions import ResponseError
       import falkordb.asyncio.graph as falkordb_graph
       import graphiti_core.search.search as search_module
       import graphiti_core.search.search_utils as search_utils
