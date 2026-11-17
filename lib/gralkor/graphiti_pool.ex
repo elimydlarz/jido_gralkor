@@ -808,15 +808,14 @@ defmodule Gralkor.GraphitiPool do
               if 'no such index' not in str(error):
                   raise
 
-      async def replace_stopword_indexes(driver):
+      async def replace_stopword_indexes(driver, replaced):
           result = await driver.execute_query(
               'CALL db.indexes() YIELD label, types, stopwords, entitytype '
               'RETURN label, types, stopwords, entitytype'
           )
           if not result:
-              return []
+              return
           records, _, _ = result
-          replaced = []
           for record in records:
               if record['entitytype'] != 'NODE' or not record['stopwords']:
                   continue
