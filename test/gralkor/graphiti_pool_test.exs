@@ -4520,49 +4520,63 @@ defmodule Gralkor.GraphitiPoolTest do
   # it: a large index is still listed as built, and still answers, for a while
   # after its drop returns.
   defp dropped_search(instance) do
-    similarity_run(instance, @vector_index_listing <> """
-    async def run():
-        found = {}
-        for kind in ('fact', 'entity'):
-            _, before = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
-            await g.driver.execute_query(DROPS[kind])
-            await until_listed(kind, False)
-            results, after = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
-            found[kind] = {
-                'before': [entry['cypher'] for entry in before],
-                'after': [entry['cypher'] for entry in after],
-                'found': results,
-                'own': await search(kind, SearchFilters(), 4, 0.6, wrapped=False),
-            }
-        return found
-    run()
-    """)
+    similarity_run(
+      instance,
+      @vector_index_listing <>
+        """
+        async def run():
+            found = {}
+            for kind in ('fact', 'entity'):
+                _, before = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
+                await g.driver.execute_query(DROPS[kind])
+                await until_listed(kind, False)
+                results, after = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
+                found[kind] = {
+                    'before': [entry['cypher'] for entry in before],
+                    'after': [entry['cypher'] for entry in after],
+                    'found': results,
+                    'own': await search(kind, SearchFilters(), 4, 0.6, wrapped=False),
+                }
+            return found
+        run()
+        """
+    )
   end
 
   defp vanished_searches(instance) do
-    similarity_run(instance, @vector_index_listing <> @vanishing_python <> """
-    async def run():
-        return {
-            'fact since': await vanishing('fact', Filters(since='2026-01-20T00:00:00Z', writers=['lens:*'])),
-            'fact': await vanishing('fact', SearchFilters()),
-            'entity': await vanishing('entity', Filters(writers=['direct'])),
-        }
-    run()
-    """)
+    similarity_run(
+      instance,
+      @vector_index_listing <>
+        @vanishing_python <>
+        """
+        async def run():
+            return {
+                'fact since': await vanishing('fact', Filters(since='2026-01-20T00:00:00Z', writers=['lens:*'])),
+                'fact': await vanishing('fact', SearchFilters()),
+                'entity': await vanishing('entity', Filters(writers=['direct'])),
+            }
+        run()
+        """
+    )
   end
 
   # A vector index created again at another dimension between the search's
   # status read and its lookup: FalkorDB refuses the lookup for its dimension,
   # not because the index is gone.
   defp failed_lookup_searches(instance) do
-    similarity_run(instance, @vector_index_listing <> @vanishing_python <> """
-    async def run():
-        return {
-            kind: await vanishing(kind, SearchFilters(), CREATES[kind].replace('dimension: 3', 'dimension: 4'))
-            for kind in ('fact', 'entity')
-        }
-    run()
-    """)
+    similarity_run(
+      instance,
+      @vector_index_listing <>
+        @vanishing_python <>
+        """
+        async def run():
+            return {
+                kind: await vanishing(kind, SearchFilters(), CREATES[kind].replace('dimension: 3', 'dimension: 4'))
+                for kind in ('fact', 'entity')
+            }
+        run()
+        """
+    )
   end
 
   defp mismatched_search(instance) do
