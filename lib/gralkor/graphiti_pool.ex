@@ -195,7 +195,6 @@ defmodule Gralkor.GraphitiPool do
                           end)
 
   @vector_indexes """
-  import redis.exceptions
   from graphiti_core.driver.driver import GraphProvider
   VECTOR_INDEXES = {
       'fact': {'entitytype': 'RELATIONSHIP', 'label': 'RELATES_TO', 'field': 'fact_embedding',
