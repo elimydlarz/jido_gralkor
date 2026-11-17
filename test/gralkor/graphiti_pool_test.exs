@@ -4460,29 +4460,6 @@ defmodule Gralkor.GraphitiPoolTest do
     """)
   end
 
-  # Drops each vector index in turn and searches once FalkorDB no longer lists
-  # it: a large index is still listed as built, and still answers, for a while
-  # after its drop returns.
-  defp dropped_search(instance) do
-    similarity_run(instance, @vector_index_listing <> """
-    async def run():
-        found = {}
-        for kind in ('fact', 'entity'):
-            _, before = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
-            await g.driver.execute_query(DROPS[kind])
-            await until_listed(kind, False)
-            results, after = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
-            found[kind] = {
-                'before': [entry['cypher'] for entry in before],
-                'after': [entry['cypher'] for entry in after],
-                'found': results,
-                'own': await search(kind, SearchFilters(), 4, 0.6, wrapped=False),
-            }
-        return found
-    run()
-    """)
-  end
-
   # Searches as the started pool wraps the search while each vector index is
   # dropped, and with `replacement` created again, just after the search reads
   # that it is built and before the search asks it, recording what the search
@@ -4561,6 +4538,29 @@ defmodule Gralkor.GraphitiPoolTest do
           await asyncio.sleep(0.01)
       raise RuntimeError(f'the {kind} vector index never became ' + ('built' if built else 'unlisted'))
   """
+
+  # Drops each vector index in turn and searches once FalkorDB no longer lists
+  # it: a large index is still listed as built, and still answers, for a while
+  # after its drop returns.
+  defp dropped_search(instance) do
+    similarity_run(instance, @vector_index_listing <> """
+    async def run():
+        found = {}
+        for kind in ('fact', 'entity'):
+            _, before = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
+            await g.driver.execute_query(DROPS[kind])
+            await until_listed(kind, False)
+            results, after = await recorded(lambda: search(kind, SearchFilters(), 4, 0.6))
+            found[kind] = {
+                'before': [entry['cypher'] for entry in before],
+                'after': [entry['cypher'] for entry in after],
+                'found': results,
+                'own': await search(kind, SearchFilters(), 4, 0.6, wrapped=False),
+            }
+        return found
+    run()
+    """)
+  end
 
   defp vanished_searches(instance) do
     similarity_run(instance, @vector_index_listing <> @vanishing_python <> """
