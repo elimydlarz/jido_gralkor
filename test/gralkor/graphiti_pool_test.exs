@@ -7719,15 +7719,16 @@ defmodule Gralkor.GraphitiPoolTest do
     ])
 
     failing =
-      fail_queries("stopwords", "DROP FULLTEXT INDEX FOR (n:Entity)", 1, "connection lost")
+      fail_queries("stopwords", "DROP FULLTEXT INDEX FOR (n:Episodic)", 1, "connection lost")
 
     capture_log(fn -> GraphitiPool.for(pid, "stopwords") end)
     sent = sent_by(failing)
 
-    replaced_episodic = &(&1 =~ "DROP FULLTEXT INDEX FOR (n:Episodic) ON (n.content)")
+    replaced_entity = &(&1 =~ "DROP FULLTEXT INDEX FOR (n:Entity) ON (n.name)")
 
-    assert Enum.find_index(sent, replaced_episodic) < Enum.find_index(sent, &(&1 == "failed"))
-    assert Enum.count(sent, replaced_episodic) == 1
+    assert Enum.find_index(sent, replaced_entity) < Enum.find_index(sent, &(&1 == "failed"))
+    assert Enum.count(sent, replaced_entity) == 1
+    assert tries(sent) == 2
 
     for index <- physical_graph_indexes(pid, "stopwords"),
         index["label"] in ["Episodic", "Entity"] do
