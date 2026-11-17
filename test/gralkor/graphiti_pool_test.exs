@@ -2350,7 +2350,7 @@ defmodule Gralkor.GraphitiPoolTest do
                "create Entity"
              ]
 
-      assert vector_index_retry_waits() == []
+      assert index_building_retry_waits() == []
     end
 
     test "and any stopword replacement and writer recording done before it are still logged",
