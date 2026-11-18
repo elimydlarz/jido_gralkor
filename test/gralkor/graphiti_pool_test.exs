@@ -3793,8 +3793,12 @@ defmodule Gralkor.GraphitiPoolTest do
     test "and the graph library's own query carries the search's query timeout", context do
       assert_repeated_search_own_query_carries_timeout(context)
     end
+  end
 
-    test "and one line is logged naming the graph and whether facts or entities were looked up, without the search's embedding",
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > if the vector index gives the same fact or entity more than once among its candidates > where at least one of those candidates passes the search's restrictions" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then one line is logged naming the graph and whether facts or entities were looked up, without the search's embedding",
          context do
       assert_repeated_search_logs_one_line(context)
     end

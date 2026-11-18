@@ -270,7 +270,8 @@ when a fact or entity similarity search runs on FalkorDB
       and the vector index is asked once
       and the graph library's own query is sent once
       and the graph library's own query carries the search's query timeout
-      and one line is logged naming the graph and whether facts or entities were looked up, without the search's embedding
+      where at least one of those candidates passes the search's restrictions
+        then one line is logged naming the graph and whether facts or entities were looked up, without the search's embedding
     where at least as many results pass as the search keeps
       while the vector index gave fewer candidates than it was asked for, or the last result kept is within the nearest share of the candidates it gave
         then no stored embedding is compared with the search's outside the vector index
