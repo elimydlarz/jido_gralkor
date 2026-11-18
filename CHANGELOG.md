@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [19.6.0] - 2026-11-18
+
 ### Fixed
 - **Similarity searches no longer return rows an overlapping vector lookup corrupted.** FalkorDB 4.x answers two lookups that overlap on the server on one vector index with wrong rows: one record repeated in place of others, or records missing (FalkorDB#2848, fixed upstream only in the 6.0.x line; 4.22.4 still has it). Under 19.5.0 and 19.5.1 a memory search's fact and entity lookups on every Destination, and an episode write's up to 20 duplicate-entity and 20 invalidation lookups, were sent at once, and the wrong rows were used. Two changes:
   - The process's lookups on one vector index run one at a time. `db.idx.vector.queryRelationships` and `queryNodes` each take an asyncio lock for the graph and procedure, held only while the lookup query runs and taken before a connection is checked out, so a waiting lookup holds no connection. Lookups on another index or another graph do not wait, and the status read, graphiti's exact queries, full-text queries, follow-up reads and writes never take it. A cancelled or failed lookup releases it.
