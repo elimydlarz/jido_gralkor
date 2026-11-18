@@ -258,6 +258,19 @@ when a fact or entity similarity search runs on FalkorDB
     then the vector index is asked for many more of the nearest facts or entities than the search keeps
     and the group, the graph library's own filters, the included and excluded writers, and the earliest creation time are applied to what the vector index gives, inside the same query, before the search's limit
     and each result is scored as the graph library scores it, and only results scoring above the search's minimum are kept, best first
+    when several searches ask vector indexes at the same time
+      then no two of this application's lookups on one vector index run at the same time
+      and a lookup waiting for its turn holds no connection to FalkorDB
+      and lookups on another vector index or another graph do not wait for it
+      and the searches' other queries do not wait for any lookup
+      if a search is cancelled or fails while its lookup runs or waits for its turn
+        then the next lookup on that vector index is not held back
+    if the vector index gives the same fact or entity more than once among its candidates
+      then the search answers with the graph library's own query under the same restrictions, through the creation-time index when an earliest creation time is supplied to a fact search
+      and the vector index is asked once
+      and the graph library's own query is sent once
+      and the graph library's own query carries the search's query timeout
+      and one line is logged naming the graph and whether facts or entities were looked up, without the search's embedding
     where at least as many results pass as the search keeps
       while the vector index gave fewer candidates than it was asked for, or the last result kept is within the nearest share of the candidates it gave
         then no stored embedding is compared with the search's outside the vector index

@@ -306,7 +306,11 @@ defmodule Gralkor.GraphitiPool do
   #   where the index's ranking is least exact, or when nothing passed, or when
   #   fewer passed from an index that gave fewer candidates than asked for,
   #   or when FalkorDB refuses the lookup because the index is gone (a dropped
-  #   index is still listed as built until its drop finishes);
+  #   index is still listed as built until its drop finishes), or when the
+  #   candidates the index gave hold a record more than once;
+  # * the process's lookups on one vector index run one at a time, because
+  #   FalkorDB 4.x answers lookups on one index that overlap with wrong rows
+  #   (FalkorDB#2848);
   # * a built vector index at another similarity or dimension fails the search;
   # * fact searches that name facts or their entities never ask the index;
   # * entity similarity search is wrapped where ingestion's entity
@@ -320,8 +324,11 @@ defmodule Gralkor.GraphitiPool do
   @search_filters """
   #{@vector_indexes}
   def install_search_filters(pinned_version):
+      import asyncio
       import contextvars
       import inspect
+      import sys
+      from collections import defaultdict
       from datetime import timezone
       from pydantic import AwareDatetime
       from redis.exceptions import ResponseError
@@ -404,6 +411,7 @@ defmodule Gralkor.GraphitiPool do
               if function(GraphProvider.FALKORDB).count(replaced) != 1:
                   unsupported(f'{owner.__name__}.{name}', ['provider'], f'a FalkorDB query without {replaced}')
       read_timeout = contextvars.ContextVar('gralkor_read_timeout', default=None)
+      lookup_locks = defaultdict(asyncio.Lock)
 
       class WriterSearchFilters(SearchFilters):
           writers: list[str] | None = None
@@ -535,18 +543,27 @@ defmodule Gralkor.GraphitiPool do
               + f'\\nYIELD {yielded}, score AS gralkor_distance'
               + f'\\nWITH collect([{yielded}, gralkor_distance]) AS gralkor_candidates, '
               + 'count(gralkor_distance) AS gralkor_reached, '
+              + f'count(DISTINCT {yielded}) AS gralkor_distinct, '
               + 'percentileDisc(gralkor_distance, $gralkor_trusted_share) AS gralkor_trusted'
               + '\\nUNWIND gralkor_candidates AS gralkor_candidate'
               + f'\\nWITH gralkor_candidate[0] AS {variable}, (2 - gralkor_candidate[1])/2 AS score, '
-              + 'gralkor_reached, gralkor_trusted'
+              + 'gralkor_reached, gralkor_distinct, gralkor_trusted'
           )
 
       async def looked_up(driver, procedure, cypher, **params):
           try:
-              records, _, _ = await driver.execute_query(cypher, routing_='r', **params)
+              async with lookup_locks[(driver._database, procedure)]:
+                  records, _, _ = await driver.execute_query(cypher, routing_='r', **params)
           except ResponseError as error:
               if str(error) != f"Invalid arguments for procedure 'db.idx.vector.{procedure}'":
                   raise
+              return None
+          if records and records[0]['gralkor_reached'] != records[0]['gralkor_distinct']:
+              print(
+                  '[gralkor] vector lookup gave a repeated record, answered by the exact query — '
+                  f'graph: {driver._database} procedure: db.idx.vector.{procedure}',
+                  file=sys.stderr,
+              )
               return None
           return records
 
@@ -583,11 +600,11 @@ defmodule Gralkor.GraphitiPool do
               cypher = (
                   nearest('queryRelationships', 'RELATES_TO', 'fact_embedding', 'relationship', 'e')
                   + '\\nWHERE ' + ' AND '.join(['score > $min_score'] + fact_clauses)
-                  + '\\nWITH e, score, gralkor_reached, gralkor_trusted, startNode(e) AS n, endNode(e) AS m'
+                  + '\\nWITH e, score, gralkor_reached, gralkor_distinct, gralkor_trusted, startNode(e) AS n, endNode(e) AS m'
                   + '\\nWHERE ' + ' AND '.join(entity_clauses)
                   + '\\nRETURN\\n'
                   + search_utils.get_entity_edge_return_query(driver.provider)
-                  + ',\\nscore AS gralkor_score, gralkor_reached, gralkor_trusted'
+                  + ',\\nscore AS gralkor_score, gralkor_reached, gralkor_distinct, gralkor_trusted'
                   + '\\nORDER BY score DESC\\nLIMIT $limit'
               )
               records = await looked_up(
@@ -674,7 +691,7 @@ defmodule Gralkor.GraphitiPool do
                   + '\\nWHERE ' + ' AND '.join(clauses)
                   + '\\nRETURN\\n'
                   + search_utils.get_entity_node_return_query(driver.provider)
-                  + ',\\nscore AS gralkor_score, gralkor_reached, gralkor_trusted'
+                  + ',\\nscore AS gralkor_score, gralkor_reached, gralkor_distinct, gralkor_trusted'
                   + '\\nORDER BY score DESC\\nLIMIT $limit'
               )
               records = await looked_up(

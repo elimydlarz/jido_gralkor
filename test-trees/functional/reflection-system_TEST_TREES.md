@@ -218,3 +218,95 @@ if the retired `:reflection_storage` setting is configured
 when a Reflection delivers to personal memory
   then its artefact is searchable only by the invocation identity
   and its artefact identifier remains derived from the unchanged operator and invocation identifiers
+
+when the Runner runs one step on its own
+  then built-in inference receives the step's declared output contract
+  and built-in inference receives the supplied tools
+  and built-in inference receives no Reflection name
+  and built-in inference receives no representations
+  when the model asks for a supplied tool
+    then that tool executes with exactly the supplied tool context
+  where a reference in the directions names a supplied value
+    where the value is a string
+      then built-in inference receives the directions with that reference replaced by the string
+    where the value is not a string
+      then built-in inference receives the directions with that reference replaced by the value's JSON encoding
+    where the value holds a reference naming another supplied value
+      then that inner reference reaches the model as written
+  where a reference in the directions names no supplied value
+    then that reference reaches the model as written
+  where the directions hold an unclosed double brace ahead of a reference naming a supplied value
+    then that reference is filled in from its value
+    and the unclosed double brace reaches the model as written
+  where the step is given a model
+    then every model request of the step runs that model
+  where the step is given no model
+    then every model request of the step runs Gralkor's configured LLM model
+  where the step is given a reasoning effort
+    then every model request of the step asks for that reasoning effort
+  where the step is given no reasoning effort
+    then no model request of the step names a reasoning effort
+  when the model returns structured output satisfying the step's declared output contract
+    then the Runner returns exactly those outputs
+    and the Runner returns no artefact
+  if a declared output key is missing
+    then the step fails identifying the missing key
+  if an undeclared output key is returned
+    then the step fails identifying the unexpected key
+  if an output value does not satisfy its declared type
+    then the step fails identifying the key and type
+  if the model request fails
+    then the step fails identifying the provider failure
+  if the model returns invalid JSON or a non-object JSON value
+    then the step fails identifying the invalid structured output
+  if the model and tool loop reaches its iteration limit without a final answer
+    then the step fails identifying the exhausted iteration limit
+  if the step fails
+    then its failure names no Reflection and no step
+
+where the Runner runs a Reflection or one step on its own with an observer
+  when built-in inference starts a model request
+    then the observer is told the request's identifier
+    when that model request finishes
+      then the observer is told the request's identifier, its duration, and its token use
+    if that model request fails
+      then the observer is told the request's identifier, its duration, and that it failed
+    if that model request gets no answer in the time allowed
+      then the observer is told the request's identifier, its duration, and that it failed
+  when built-in inference starts a tool call
+    then the observer is told the call's identifier, tool name, and arguments
+    when that tool call completes
+      then the observer is told the call's identifier, tool name, duration, and whether it succeeded
+      and the observer is told the call's result as the model receives it
+
+where the Runner runs a Reflection or one step on its own with a time allowed for a tool call
+  if a tool call runs longer than that time
+    then that tool call fails
+    and the model receives that failure within the same step
+
+where the Runner runs a Reflection or one step on its own without being given a time allowed for a tool call
+  if a tool call runs longer than the default time
+    then that tool call fails
+    and the model receives that failure within the same step
+
+where the Runner runs a Reflection or one step on its own with a limit on rounds of tool use in a step
+  if the model keeps asking for tools beyond that many rounds
+    then the step fails identifying the exhausted iteration limit
+    and the model receives no more requests in that step than that limit
+
+where the Runner runs a Reflection or one step on its own without being given a limit on rounds of tool use in a step
+  if the model keeps asking for tools beyond the default number of rounds
+    then the step fails identifying the exhausted iteration limit
+    and the model receives no more requests in that step than the default number
+
+where the Runner runs a Reflection or one step on its own with a limit on tool calls at once
+  when the model asks for more tool calls in one answer than that limit
+    then no more than that limit of them run at the same time
+    and as many of them as that limit run at the same time
+    and the model receives every one of their results within the same step
+
+where the Runner runs a Reflection or one step on its own without being given a limit on tool calls at once
+  when the model asks for more tool calls in one answer than the default limit
+    then no more than the default limit of them run at the same time
+    and as many of them as the default limit run at the same time
+    and the model receives every one of their results within the same step

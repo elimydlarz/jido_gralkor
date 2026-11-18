@@ -780,6 +780,41 @@ defmodule Gralkor.Reflection.RunnerTest do
                        {:tool_completed,
                         %{id: "call-1", name: "lookup", duration_ms: 30, ok?: false}}}
     end
+
+    test "and the observer is told the text the model receives as the call's result" do
+      emit_through_built_in_inference(
+        react_event(:tool_completed,
+          data: %{result: {:ok, %{evidence: "x"}, []}, duration_ms: 12}
+        )
+      )
+
+      emit_through_built_in_inference(
+        react_event(:tool_completed, data: %{result: {:error, :timeout}, duration_ms: 30})
+      )
+
+      assert_received {:observed, {:tool_completed, %{ok?: true, result: succeeded}}}
+      assert Jason.decode!(succeeded) == %{"ok" => true, "result" => %{"evidence" => "x"}}
+
+      assert_received {:observed, {:tool_completed, %{ok?: false, result: failed}}}
+      assert %{"ok" => false, "error" => %{"type" => "timeout"}} = Jason.decode!(failed)
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > where an observer is supplied > when the ReAct runtime completes a tool call > where that text is made of several content parts" do
+    test "then the observer is told the text of those parts joined" do
+      parts = [
+        ReqLLM.Message.ContentPart.text("first part"),
+        ReqLLM.Message.ContentPart.text("second part")
+      ]
+
+      emit_through_built_in_inference(
+        react_event(:tool_completed, data: %{result: {:ok, parts, []}, duration_ms: 5})
+      )
+
+      assert_received {:observed, {:tool_completed, %{result: result}}}
+      assert [envelope, "first part", "second part"] = String.split(result, "\n")
+      assert %{"ok" => true} = Jason.decode!(envelope)
+    end
   end
 
   describe "when built-in inference is invoked for a step > where an observer is supplied > when the ReAct runtime emits any other event" do
@@ -889,6 +924,447 @@ defmodule Gralkor.Reflection.RunnerTest do
         assert drain_messages() == [:model_call]
       end
     end
+  end
+
+  describe "when built-in inference is invoked for a step > where the request carries no representations" do
+    test "then the prompt carries the directions and the output contract and no representations section" do
+      assert built_in_prompt(Map.delete(default_inference_request(), :representations)) == """
+             Use the evidence.
+
+             Return only one JSON object satisfying this exact output contract:
+             {"answer":"string"}
+
+             The quoted contract values are type declarations, not literal output
+             values. Emit actual JSON values of those types. In particular, an object
+             declaration such as "{ field: string }" requires a nested JSON object,
+             and an Array<...> declaration requires a JSON array; do not quote either.
+             """
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > where the request carries no operator" do
+    test "then the tool context is exactly the supplied tool context" do
+      test_pid = self()
+      request = Map.delete(default_inference_request(), :operator_id)
+
+      caller = fn _prompt, _config, opts ->
+        send(test_pid, {:built_in_context, Keyword.fetch!(opts, :context)})
+        %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
+      end
+
+      assert {:ok, _} = Runner.default_inference(request, caller)
+      assert_receive {:built_in_context, context}
+      assert context == request.tool_context
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > where a time allowed for a tool call, a limit on rounds of tool use, and a limit on tool calls at once are supplied" do
+    test "then the ReAct runtime is given exactly those limits" do
+      config =
+        built_in_config(default_inference_request(),
+          tool_timeout_ms: 1_500,
+          max_iterations: 4,
+          tool_concurrency: 3
+        )
+
+      assert Map.take(config, [:tool_timeout_ms, :max_iterations, :tool_concurrency]) == %{
+               tool_timeout_ms: 1_500,
+               max_iterations: 4,
+               tool_concurrency: 3
+             }
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > where no limits are supplied" do
+    test "then the ReAct runtime is given the Runner's default limits" do
+      assert Gralkor.Reflection.Runner.default_limits() == %{
+               tool_timeout_ms: 30_000,
+               max_iterations: 10,
+               tool_concurrency: 1
+             }
+
+      assert Map.take(built_in_config(default_inference_request(), []), [
+               :tool_timeout_ms,
+               :max_iterations,
+               :tool_concurrency
+             ]) == Gralkor.Reflection.Runner.default_limits()
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > if a supplied limit is not a positive integer" do
+    test "then built-in inference raises naming the limit and the value" do
+      for limit <- [:tool_timeout_ms, :max_iterations, :tool_concurrency],
+          value <- [0, -1, 1.5, "10", nil] do
+        message = "#{inspect(limit)} must be a positive integer, got: #{inspect(value)}"
+
+        assert_raise ArgumentError, message, fn ->
+          Runner.default_inference(default_inference_request(), unreachable_model(), [
+            {limit, value}
+          ])
+        end
+      end
+
+      refute_received :model_call
+    end
+  end
+
+  describe "when built-in inference is invoked for a step > if the event stream ends while the run neither completed, failed, nor was cancelled" do
+    test "then built-in inference fails naming the time it waited for a response" do
+      request = default_inference_request()
+      open = [llm_event(:llm_started, 0)]
+
+      assert {:error, {:no_response_within, 90_000}} =
+               Runner.default_inference(request, ending_stream(open))
+
+      assert {:error, {:no_response_within, 60_250}} =
+               Runner.default_inference(request, ending_stream(open), tool_timeout_ms: 250)
+
+      for kind <- [:request_completed, :request_failed, :request_cancelled] do
+        assert {:error, nil} =
+                 Runner.default_inference(
+                   request,
+                   ending_stream(open ++ [llm_event(kind, 10)])
+                 )
+      end
+    end
+  end
+
+  describe "where built-in inference has an observer > when a model request starts" do
+    test "then the observer is told the request's identifier and model" do
+      stream_through_built_in_inference([
+        llm_event(:llm_started, 1_000, data: %{model: "openai:runner-contract-model"}),
+        llm_event(:llm_completed, 1_100),
+        llm_event(:request_completed, 1_150)
+      ])
+
+      assert [
+               {:model_request_started, %{id: "llm-1", model: "openai:runner-contract-model"}}
+               | _
+             ] = observed_events()
+    end
+  end
+
+  describe "where built-in inference has an observer > when a model request starts > when that request completes" do
+    test "then the observer is told the request's identifier, the time from its start to its completion, and its token use" do
+      usage = %{input_tokens: 3, output_tokens: 4, total_tokens: 7}
+
+      stream_through_built_in_inference([
+        llm_event(:llm_started, 1_000, data: %{model: "openai:runner-contract-model"}),
+        llm_event(:llm_completed, 1_250, data: %{usage: usage}),
+        llm_event(:request_completed, 1_300)
+      ])
+
+      assert [
+               {:model_request_started, %{id: "llm-1"}},
+               {:model_request_finished, %{id: "llm-1", duration_ms: 250, usage: ^usage}}
+             ] = observed_events()
+    end
+  end
+
+  describe "where built-in inference has an observer > when a model request starts > if the run fails while that request is open" do
+    test "then the observer is told the request's identifier, the time from its start to the failure, and that it failed" do
+      stream_through_built_in_inference([
+        llm_event(:llm_started, 1_000, data: %{model: "openai:runner-contract-model"}),
+        llm_event(:request_failed, 1_400)
+      ])
+
+      assert [
+               {:model_request_started, %{id: "llm-1"}},
+               {:model_request_failed, %{id: "llm-1", duration_ms: 400}}
+             ] = observed_events()
+    end
+  end
+
+  describe "where built-in inference has an observer > when a model request starts > if the stream ends before the run ends, with that request open" do
+    test "then the observer is told that request failed, with its identifier and the time until the stream ended" do
+      started_at = System.system_time(:millisecond) - 5_000
+
+      stream_through_built_in_inference([
+        llm_event(:llm_started, started_at, data: %{model: "openai:runner-contract-model"})
+      ])
+
+      assert [
+               {:model_request_started, %{id: "llm-1"}},
+               {:model_request_failed, %{id: "llm-1", duration_ms: duration}}
+             ] = observed_events()
+
+      assert duration >= 5_000 and duration < 10_000
+
+      stream_through_built_in_inference([
+        llm_event(:llm_started, started_at, data: %{model: "openai:runner-contract-model"}),
+        llm_event(:request_cancelled, started_at + 10)
+      ])
+
+      assert [{:model_request_started, %{id: "llm-1"}}] = observed_events()
+    end
+  end
+
+  describe "where built-in inference has an observer > if the run fails while no model request is open" do
+    test "then the observer is told of no failed model request" do
+      stream_through_built_in_inference([
+        llm_event(:llm_started, 1_000, data: %{model: "openai:runner-contract-model"}),
+        llm_event(:llm_completed, 1_100),
+        llm_event(:request_failed, 1_200)
+      ])
+
+      assert [
+               {:model_request_started, %{id: "llm-1"}},
+               {:model_request_finished, %{id: "llm-1"}}
+             ] = observed_events()
+    end
+  end
+
+  describe "when the Runner runs one step on its own" do
+    test "then inference receives the step's directions with references filled in from the supplied values" do
+      request =
+        step_request_for(
+          %{directions: "Review {{ ticket }} in {{ counts }}.", output: %{"answer" => "string"}},
+          %{"ticket" => "OPS-12", "counts" => [3, 4]}
+        )
+
+      assert request.directions == "Review OPS-12 in [3,4]."
+      assert request.step == %{directions: "Review OPS-12 in [3,4]."}
+    end
+
+    test "and inference receives the step's output contract, the supplied tools, and the supplied tool context" do
+      request = step_request_for(one_step(), %{})
+      assert request.output_schema == %{"answer" => "string"}
+      assert request.tools == [SampleTool]
+      assert request.tool_context == %{session_id: "thread-one"}
+    end
+
+    test "and inference receives no Reflection name, operator, invocation identifier, invocation context, or representations" do
+      request = step_request_for(one_step(), %{})
+
+      for key <- [
+            :reflection,
+            :operator_id,
+            :invocation_id,
+            :invocation_context,
+            :representations
+          ] do
+        refute Map.has_key?(request, key)
+      end
+    end
+  end
+
+  describe "when the Runner runs one step on its own > where the step names a model or a reasoning effort" do
+    test "then the step's request carries the model and reasoning effort it names" do
+      model = %{provider: :openai, id: "step-model"}
+
+      request =
+        step_request_for(Map.merge(one_step(), %{model: model, reasoning_effort: :high}), %{})
+
+      assert request.step == %{directions: "Answer.", model: model, reasoning_effort: :high}
+    end
+  end
+
+  describe "when the Runner runs one step on its own > when inference returns wrapped tool calls" do
+    test "then each call is executed with its model-produced arguments and exactly the supplied tool context" do
+      test_pid = self()
+      call = %{name: "lookup", arguments: %{"query" => "deployment"}}
+
+      inference = fn
+        %{tool_results: []} -> {:ok, %{tool_calls: [call]}}
+        %{tool_results: [_result]} -> {:ok, %{output: %{"answer" => "ready"}}}
+      end
+
+      executor = fn received_call, context ->
+        send(test_pid, {:tool_execution, received_call, context})
+        {:ok, "stored evidence"}
+      end
+
+      assert {:ok, _} =
+               Gralkor.Reflection.Runner.run_step(one_step(), %{},
+                 inference: inference,
+                 tool_executor: executor,
+                 tools: [SampleTool],
+                 tool_context: %{session_id: "thread-one"}
+               )
+
+      assert_receive {:tool_execution, ^call, context}
+      assert context == %{tools: [SampleTool], tool_context: %{session_id: "thread-one"}}
+    end
+
+    test "and each result is returned to inference within the same step" do
+      test_pid = self()
+      call = %{name: "lookup", arguments: %{"query" => "deployment"}}
+
+      inference = fn
+        %{tool_results: []} ->
+          {:ok, %{tool_calls: [call]}}
+
+        %{tool_results: results} ->
+          send(test_pid, {:returned_tool_results, results})
+          {:ok, %{output: %{"answer" => "ready"}}}
+      end
+
+      assert {:ok, %{"answer" => "ready"}} =
+               Gralkor.Reflection.Runner.run_step(one_step(), %{},
+                 inference: inference,
+                 tool_executor: fn _call, _context -> {:ok, %{content: "evidence"}} end
+               )
+
+      assert_receive {:returned_tool_results,
+                      [%{call: ^call, result: {:ok, %{content: "evidence"}}}]}
+    end
+  end
+
+  describe "when the Runner runs one step on its own > when inference returns wrapped structured output satisfying the step's exact contract" do
+    test "then the Runner returns exactly that output" do
+      assert Gralkor.Reflection.Runner.run_step(one_step(), %{},
+               inference: fn _request -> {:ok, %{output: %{answer: "ready"}}} end
+             ) == {:ok, %{"answer" => "ready"}}
+    end
+  end
+
+  describe "when the Runner runs one step on its own > if inference omits a declared output" do
+    test "then the Runner failure is the missing key alone" do
+      assert Gralkor.Reflection.Runner.run_step(one_step(), %{},
+               inference: fn _request -> {:ok, %{output: %{}}} end
+             ) == {:error, {:missing_output, "answer"}}
+    end
+  end
+
+  describe "when the Runner runs one step on its own > if inference returns an undeclared output" do
+    test "then the Runner failure is the unexpected key alone" do
+      assert Gralkor.Reflection.Runner.run_step(one_step(), %{},
+               inference: fn _request ->
+                 {:ok, %{output: %{"answer" => "ready", "extra" => "undeclared"}}}
+               end
+             ) == {:error, {:unexpected_output, "extra"}}
+    end
+  end
+
+  describe "when the Runner runs one step on its own > if inference returns a value of the wrong declared type" do
+    test "then the Runner failure is the key and type alone" do
+      step = %{directions: "Count.", output: %{"count" => "integer"}}
+
+      assert Gralkor.Reflection.Runner.run_step(step, %{},
+               inference: fn _request -> {:ok, %{output: %{"count" => "many"}}} end
+             ) == {:error, {:output_type_mismatch, "count", "integer"}}
+    end
+  end
+
+  describe "when the Runner runs one step on its own > if inference fails or returns an invalid response" do
+    test "then the Runner failure is the reason alone" do
+      assert Gralkor.Reflection.Runner.run_step(one_step(), %{},
+               inference: fn _request -> {:error, :provider_down} end
+             ) == {:error, :provider_down}
+
+      assert Gralkor.Reflection.Runner.run_step(one_step(), %{},
+               inference: fn _request -> :not_a_response end
+             ) == {:error, {:invalid_inference_response, :not_a_response}}
+    end
+  end
+
+  describe "when the Runner runs one step on its own > where an observer is supplied" do
+    test "then the observer is told of no step starting, finishing, or failing" do
+      for inference <- [
+            fn _request -> {:ok, %{output: %{"answer" => "ready"}}} end,
+            fn _request -> {:ok, %{output: %{}}} end,
+            fn _request -> {:error, :provider_down} end
+          ] do
+        Gralkor.Reflection.Runner.run_step(one_step(), %{},
+          inference: inference,
+          observer: observer()
+        )
+      end
+
+      refute_received {:observed, _event}
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own with a limit that is not a positive integer" do
+    test "then the Runner raises naming the limit and the value" do
+      for {limit, value} <- [tool_timeout_ms: 0, max_iterations: -2, tool_concurrency: "4"],
+          entry <- [:reflection, :step] do
+        assert_raise ArgumentError,
+                     "#{inspect(limit)} must be a positive integer, got: #{inspect(value)}",
+                     fn -> run_entry_with(entry, [{limit, value}]) end
+      end
+    end
+
+    test "and no inference is requested" do
+      for entry <- [:reflection, :step] do
+        assert_raise ArgumentError, fn -> run_entry_with(entry, max_iterations: 0) end
+      end
+
+      refute_received {:inference_request, _request}
+    end
+  end
+
+  defp run_entry_with(:reflection, opts),
+    do:
+      Runner.run(single_step_reflection(), invocation(), [
+        {:inference, inference_answering(%{"answer" => "ready"})} | opts
+      ])
+
+  defp run_entry_with(:step, opts),
+    do:
+      Gralkor.Reflection.Runner.run_step(one_step(), %{}, [
+        {:inference, inference_answering(%{"answer" => "ready"})} | opts
+      ])
+
+  defp one_step, do: %{directions: "Answer.", output: %{"answer" => "string"}}
+
+  defp step_request_for(step, values) do
+    assert {:ok, _} =
+             Gralkor.Reflection.Runner.run_step(step, values,
+               inference: inference_answering(%{"answer" => "ready"}),
+               tools: [SampleTool],
+               tool_context: %{session_id: "thread-one"}
+             )
+
+    assert_receive {:inference_request, request}
+    request
+  end
+
+  defp unreachable_model do
+    test_pid = self()
+
+    fn _prompt, _config, _opts ->
+      send(test_pid, :model_call)
+      %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
+    end
+  end
+
+  defp ending_stream(trace) do
+    fn _prompt, _config, _opts -> %{termination_reason: nil, result: nil, trace: trace} end
+  end
+
+  defp stream_through_built_in_inference(events) do
+    caller = fn _prompt, _config, opts ->
+      events
+      |> Gralkor.Reflection.Runner.observed_events(Keyword.fetch!(opts, :on_event))
+      |> Stream.run()
+
+      %{termination_reason: :final_answer, result: ~s({"answer":"ready"})}
+    end
+
+    assert {:ok, _} =
+             Gralkor.Reflection.Runner.default_inference(default_inference_request(), caller,
+               model_resolver: fn -> %{provider: "openai", id: "runner-contract-model"} end,
+               observer: observer()
+             )
+  end
+
+  defp observed_events(events \\ []) do
+    receive do
+      {:observed, event} -> observed_events([event | events])
+    after
+      0 -> Enum.reverse(events)
+    end
+  end
+
+  defp llm_event(kind, at_ms, fields \\ []) do
+    react_event(
+      kind,
+      Keyword.merge(
+        [at_ms: at_ms, llm_call_id: "llm-1", tool_call_id: nil, tool_name: nil],
+        fields
+      )
+    )
   end
 
   defp dropped_connection(reason) do

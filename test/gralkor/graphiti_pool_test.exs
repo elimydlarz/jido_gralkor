@@ -3745,6 +3745,61 @@ defmodule Gralkor.GraphitiPoolTest do
     end
   end
 
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > when several searches ask vector indexes at the same time" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph, :seed_deep_vector_graph]
+
+    test "then no two of this application's lookups on one vector index run at the same time",
+         context do
+      assert_no_two_lookups_on_one_index_overlap(context)
+    end
+
+    test "and a lookup waiting for its turn holds no connection to FalkorDB", context do
+      assert_waiting_lookup_holds_no_connection(context)
+    end
+
+    test "and lookups on another vector index or another graph do not wait for it", context do
+      assert_lookups_on_other_indexes_do_not_wait(context)
+    end
+
+    test "and the searches' other queries do not wait for any lookup", context do
+      assert_other_queries_do_not_wait_for_lookups(context)
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > when several searches ask vector indexes at the same time > if a search is cancelled or fails while its lookup runs or waits for its turn" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the next lookup on that vector index is not held back", context do
+      assert_next_lookup_not_held_back(context)
+    end
+  end
+
+  describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > if the vector index gives the same fact or entity more than once among its candidates" do
+    setup [:start_real_embedded_pool, :seed_standard_vector_graph]
+
+    test "then the search answers with the graph library's own query under the same restrictions, through the creation-time index when an earliest creation time is supplied to a fact search",
+         context do
+      assert_repeated_search_answers_with_own_query(context)
+    end
+
+    test "and the vector index is asked once", context do
+      assert_repeated_search_asks_index_once(context)
+    end
+
+    test "and the graph library's own query is sent once", context do
+      assert_repeated_search_sends_own_query_once(context)
+    end
+
+    test "and the graph library's own query carries the search's query timeout", context do
+      assert_repeated_search_own_query_carries_timeout(context)
+    end
+
+    test "and one line is logged naming the graph and whether facts or entities were looked up, without the search's embedding",
+         context do
+      assert_repeated_search_logs_one_line(context)
+    end
+  end
+
   describe "when a fact or entity similarity search runs on FalkorDB > while the graph's vector index for those embeddings is built > where at least as many results pass as the search keeps > while the vector index gave fewer candidates than it was asked for, or the last result kept is within the nearest share of the candidates it gave" do
     setup [:start_real_embedded_pool, :seed_standard_vector_graph, :seed_deep_vector_graph]
 
@@ -4562,6 +4617,225 @@ defmodule Gralkor.GraphitiPoolTest do
         """
     )
   end
+
+  @lookup_timing_python """
+  import asyncio
+  import time
+
+  PROCEDURES = {'fact': 'queryRelationships', 'entity': 'queryNodes'}
+
+  async def similar(driver, kind, restriction=None):
+      restriction = restriction or SearchFilters()
+      if kind == 'fact':
+          found = await search_module.edge_similarity_search(driver, QUERY, None, None, restriction, None, 4, 0.6)
+      else:
+          found = await search_module.node_similarity_search(driver, QUERY, restriction, None, 4, 0.6)
+      return [record.uuid for record in found]
+  """
+
+  # Searches each vector index of two graphs three times, each search starting
+  # a little after the one before, while every lookup takes a quarter of a
+  # second, and names facts in one more search meanwhile; records when each
+  # search starts and when each query it sends starts and ends.
+  @concurrent_lookups_python """
+  LOOKUP_SECONDS = 0.25
+  STAGGER_SECONDS = 0.05
+
+  def timing(graph, driver, events):
+      original = driver.execute_query
+      async def timed(cypher, **params):
+          event = {'graph': graph, 'kind': 'other', 'procedure': None, 'start': time.monotonic()}
+          for procedure in PROCEDURES.values():
+              if 'db.idx.vector.' + procedure in cypher:
+                  event.update(kind='lookup', procedure=procedure)
+          if cypher.startswith('CALL db.indexes()') and 'gralkor_label' in params:
+              procedure = PROCEDURES['fact' if params['gralkor_label'] == 'RELATES_TO' else 'entity']
+              event.update(kind='status', procedure=procedure)
+          if 'vec.cosineDistance' in cypher:
+              event['kind'] = 'own'
+          try:
+              if event['kind'] == 'lookup':
+                  await asyncio.sleep(LOOKUP_SECONDS)
+              return await original(cypher, **params)
+          finally:
+              event['end'] = time.monotonic()
+              events.append(event)
+      driver.execute_query = timed
+
+  async def run():
+      graphs = {'g': g, 'deep': deep}
+      alone = {
+          f'{graph}:{kind}': await similar(instance.driver, kind)
+          for graph, instance in graphs.items() for kind in PROCEDURES
+      }
+      events = []
+      for graph, instance in graphs.items():
+          timing(graph, instance.driver, events)
+      async def searched(graph, kind, delay):
+          await asyncio.sleep(delay)
+          events.append({'graph': graph, 'kind': 'search', 'procedure': PROCEDURES[kind], 'start': time.monotonic()})
+          return f'{graph}:{kind}', await similar(graphs[graph].driver, kind)
+      async def named():
+          await asyncio.sleep(STAGGER_SECONDS)
+          return await similar(g.driver, 'fact', SearchFilters(edge_uuids=['f1', 'f2', 'f3']))
+      try:
+          found = await asyncio.gather(
+              *(searched(graph, kind, STAGGER_SECONDS * i) for graph in graphs for kind in PROCEDURES for i in range(3)),
+              named(),
+          )
+      finally:
+          for instance in graphs.values():
+              del instance.driver.execute_query
+      results = {}
+      for name, uuids in found[:-1]:
+          results.setdefault(name, []).append(uuids)
+      return {'alone': alone, 'results': results, 'events': events}
+  run()
+  """
+
+  # For each kind, cancels a search while its lookup runs, cancels one while
+  # its lookup waits behind another, and lets one lookup fail, each time then
+  # timing the next search on that index.
+  @interrupted_lookups_python """
+  async def run():
+      alone = {kind: await similar(g.driver, kind) for kind in PROCEDURES}
+      original = g.driver.execute_query
+      state = {'hold': 0, 'fail': False, 'entered': asyncio.Event()}
+      async def interrupting(cypher, **params):
+          if 'db.idx.vector' in cypher:
+              state['entered'].set()
+              if state['fail']:
+                  state['fail'] = False
+                  raise RuntimeError('lookup failed')
+              await asyncio.sleep(state['hold'])
+          return await original(cypher, **params)
+      async def outcome(task):
+          try:
+              await task
+              return 'finished'
+          except asyncio.CancelledError:
+              return 'CancelledError'
+          except Exception as error:
+              return type(error).__name__ + ': ' + str(error)
+      def holding(kind, seconds):
+          state['entered'] = asyncio.Event()
+          state['hold'] = seconds
+          return asyncio.create_task(similar(g.driver, kind))
+      cases = {}
+      async def next_search(name, kind, interrupted):
+          state['hold'] = 0
+          started = time.monotonic()
+          found = await asyncio.wait_for(similar(g.driver, kind), 5)
+          cases[name] = {'kind': kind, 'interrupted': interrupted, 'next': found, 'next_seconds': time.monotonic() - started}
+      g.driver.execute_query = interrupting
+      try:
+          for kind in PROCEDURES:
+              running = holding(kind, 30)
+              await state['entered'].wait()
+              running.cancel()
+              await next_search(kind + ' cancelled while its lookup runs', kind, await outcome(running))
+              holder = holding(kind, 0.3)
+              await state['entered'].wait()
+              waiting = asyncio.create_task(similar(g.driver, kind))
+              await asyncio.sleep(0.05)
+              waiting.cancel()
+              interrupted = await outcome(waiting)
+              await holder
+              await next_search(kind + ' cancelled while its lookup waits', kind, interrupted)
+              state['fail'] = True
+              failed = await outcome(asyncio.create_task(similar(g.driver, kind)))
+              await next_search(kind + ' whose lookup failed', kind, failed)
+      finally:
+          del g.driver.execute_query
+      return {'alone': alone, 'cases': cases}
+  run()
+  """
+
+  # Searches as the started pool wraps the search while the vector index gives
+  # the farthest fact or entity twice among its candidates, recording what the
+  # search sends, the query timeout of each query, and what it writes to
+  # standard error, and searches as the graph library does.
+  @repeating_python """
+  import io
+  import sys
+  from falkordb.asyncio.graph import AsyncGraph
+
+  READ_TIMEOUT = 4321
+  REPEATS = {
+      'fact': ('YIELD relationship, score AS gralkor_distance', 'relationship', 'f49'),
+      'entity': ('YIELD node, score AS gralkor_distance', 'node', 't49'),
+  }
+
+  async def repeating(kind, restriction):
+      yielded, variable, uuid = REPEATS[kind]
+      original = g.driver.execute_query
+      async def repeated(cypher, **params):
+          if 'db.idx.vector' in cypher:
+              if cypher.count(yielded) != 1:
+                  raise RuntimeError('the lookup no longer yields ' + yielded)
+              cypher = cypher.replace(
+                  yielded,
+                  yielded
+                  + f"\\nUNWIND CASE WHEN {variable}.uuid = '{uuid}' THEN [1, 2] ELSE [1] END AS gralkor_twice"
+                  + f'\\nWITH {variable}, gralkor_distance',
+              )
+          return await original(cypher, **params)
+      timeouts = []
+      own_query = AsyncGraph._query
+      async def timed(graph, q, params=None, timeout=None, read_only=False):
+          timeouts.append([q, timeout])
+          return await own_query(graph, q, params=params, timeout=timeout, read_only=read_only)
+      logged = io.StringIO()
+      stderr = sys.stderr
+      AsyncGraph._query = timed
+      token = search_utils._gralkor_read_timeout.set(READ_TIMEOUT)
+      g.driver.execute_query = repeated
+      sys.stderr = logged
+      try:
+          found, sent = await recorded(lambda: search(kind, restriction, 4, 0.6))
+      finally:
+          sys.stderr = stderr
+          del g.driver.execute_query
+          search_utils._gralkor_read_timeout.reset(token)
+          AsyncGraph._query = own_query
+      return {
+          'sent': [entry['cypher'] for entry in sent],
+          'own_timeouts': [timeout for q, timeout in timeouts if 'vec.cosineDistance' in q],
+          'read_timeout': READ_TIMEOUT,
+          'found': found,
+          'own': await search(kind, restriction, 4, 0.6, wrapped=False),
+          'logged': logged.getvalue(),
+      }
+
+  async def run():
+      return {
+          'fact': await repeating('fact', SearchFilters()),
+          'fact since': await repeating('fact', Filters(since='2026-01-20T00:00:00Z', writers=['lens:*'])),
+          'entity': await repeating('entity', Filters(writers=['direct'])),
+      }
+  run()
+  """
+
+  defp concurrent_searches(%{instance: instance, deep: deep}) do
+    (@similarity_python <> @lookup_timing_python <> @concurrent_lookups_python)
+    |> Gralkor.Python.run_coroutine(%{"g" => instance, "deep" => deep})
+    |> Pythonx.decode()
+  end
+
+  defp events_by_index(found, kind) do
+    found["events"]
+    |> Enum.filter(&(&1["kind"] == kind))
+    |> Enum.sort_by(& &1["start"])
+    |> Enum.group_by(&[&1["graph"], &1["procedure"]])
+  end
+
+  defp lookups_by_index(found), do: events_by_index(found, "lookup")
+
+  defp interrupted_lookups(instance) do
+    similarity_run(instance, @lookup_timing_python <> @interrupted_lookups_python)
+  end
+
+  defp repeated_searches(instance), do: similarity_run(instance, @repeating_python)
 
   # A vector index created again at another dimension, and built, between the
   # search's status read and its lookup: FalkorDB refuses the lookup for its
@@ -8383,6 +8657,130 @@ defmodule Gralkor.GraphitiPoolTest do
   defp assert_dropped_search_asks_no_index(%{instance: instance}) do
     for {kind, found} <- dropped_search(instance) do
       refute Enum.any?(found["after"], &(&1 =~ "db.idx.vector")), kind
+    end
+  end
+
+  defp assert_no_two_lookups_on_one_index_overlap(context) do
+    found = concurrent_searches(context)
+
+    for {index, lookups} <- lookups_by_index(found) do
+      assert length(lookups) == 3, inspect(index)
+
+      for [earlier, later] <- Enum.chunk_every(lookups, 2, 1, :discard) do
+        assert later["start"] >= earlier["end"], inspect(index)
+      end
+    end
+
+    for {search, alone} <- found["alone"] do
+      assert Enum.all?(found["results"][search], &(&1 == alone)), search
+    end
+  end
+
+  defp assert_waiting_lookup_holds_no_connection(context) do
+    found = concurrent_searches(context)
+    searches = events_by_index(found, "search")
+
+    for {index, [first | waiting]} <- lookups_by_index(found) do
+      assert [_ | later_searches] = searches[index]
+
+      for {lookup, search} <- Enum.zip(waiting, later_searches) do
+        assert search["start"] < first["end"], inspect(index)
+        assert lookup["start"] >= first["end"], inspect(index)
+      end
+    end
+  end
+
+  defp assert_lookups_on_other_indexes_do_not_wait(context) do
+    firsts =
+      context
+      |> concurrent_searches()
+      |> lookups_by_index()
+      |> Enum.map(fn {_, [first | _]} -> first end)
+
+    assert length(firsts) == 4
+    assert Enum.max_by(firsts, & &1["start"])["start"] < Enum.min_by(firsts, & &1["end"])["end"]
+  end
+
+  defp assert_other_queries_do_not_wait_for_lookups(context) do
+    found = concurrent_searches(context)
+    by_index = lookups_by_index(found)
+    statuses = events_by_index(found, "status")
+
+    for {index, [first | _]} <- by_index do
+      status_reads = Enum.filter(statuses[index], &(&1["start"] > first["start"]))
+
+      assert length(status_reads) == 2, inspect(index)
+      assert Enum.all?(status_reads, &(&1["start"] < first["end"])), inspect(index)
+    end
+
+    [first_fact_lookup | _] = by_index[["g", "queryRelationships"]]
+    assert [own] = Enum.filter(found["events"], &(&1["kind"] == "own"))
+    assert own["start"] > first_fact_lookup["start"]
+    assert own["start"] < first_fact_lookup["end"]
+  end
+
+  defp assert_next_lookup_not_held_back(%{instance: instance}) do
+    found = interrupted_lookups(instance)
+
+    for {name, outcome} <- found["cases"] do
+      assert outcome["interrupted"] in ["CancelledError", "RuntimeError: lookup failed"], name
+      assert outcome["next"] == found["alone"][outcome["kind"]], name
+      assert outcome["next_seconds"] < 1, name
+    end
+
+    assert map_size(found["cases"]) == 6
+  end
+
+  defp assert_repeated_search_answers_with_own_query(%{instance: instance}) do
+    found = repeated_searches(instance)
+
+    for {name, case_found} <- found do
+      assert [status, lookup, own] = case_found["sent"], name
+      assert status =~ "CALL db.indexes()", name
+      assert lookup =~ "db.idx.vector", name
+      assert own =~ "vec.cosineDistance", name
+      assert case_found["found"] == case_found["own"], name
+      assert case_found["found"] != [], name
+    end
+
+    own_since = List.last(found["fact since"]["sent"])
+    assert own_since =~ "MATCH ()-[e:RELATES_TO]->()"
+    assert own_since =~ "e.created_at >= $gralkor_since"
+  end
+
+  defp assert_repeated_search_asks_index_once(%{instance: instance}) do
+    for {name, found} <- repeated_searches(instance) do
+      assert Enum.count(found["sent"], &(&1 =~ "db.idx.vector")) == 1, name
+    end
+  end
+
+  defp assert_repeated_search_sends_own_query_once(%{instance: instance}) do
+    for {name, found} <- repeated_searches(instance) do
+      assert Enum.count(found["sent"], &(&1 =~ "vec.cosineDistance")) == 1, name
+    end
+  end
+
+  defp assert_repeated_search_own_query_carries_timeout(%{instance: instance}) do
+    for {name, found} <- repeated_searches(instance) do
+      assert found["own_timeouts"] == [found["read_timeout"]], name
+    end
+  end
+
+  defp assert_repeated_search_logs_one_line(%{instance: instance}) do
+    found = repeated_searches(instance)
+
+    for {name, procedure} <- [
+          {"fact", "queryRelationships"},
+          {"fact since", "queryRelationships"},
+          {"entity", "queryNodes"}
+        ] do
+      assert String.split(found[name]["logged"], "\n", trim: true) == [
+               "[gralkor] vector lookup gave a repeated record, answered by the exact query — " <>
+                 "graph: #{physical("vectors")} procedure: db.idx.vector.#{procedure}"
+             ],
+             name
+
+      refute found[name]["logged"] =~ "1.0", name
     end
   end
 

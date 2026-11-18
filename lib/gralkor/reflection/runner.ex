@@ -7,64 +7,125 @@ defmodule Gralkor.Reflection.Runner do
 
   @max_output_tokens 32_768
   @dropped_call_retry_delays_ms [1_000, 2_000, 4_000]
+  @default_limits %{tool_timeout_ms: 30_000, max_iterations: 10, tool_concurrency: 1}
+  @no_response_margin_ms 60_000
+  @terminal_kinds [:request_completed, :request_failed, :request_cancelled]
 
+  @type step_spec :: %{
+          required(:directions) => String.t(),
+          required(:output) => %{String.t() => String.t()},
+          optional(:model) => %{provider: atom() | String.t(), id: String.t()},
+          optional(:reasoning_effort) => atom()
+        }
+
+  @type step_failure ::
+          {:missing_output, String.t()}
+          | {:unexpected_output, String.t()}
+          | {:output_type_mismatch, String.t(), String.t()}
+          | {:invalid_structured_output, term()}
+          | {:no_response_within, pos_integer()}
+          | :max_iterations
+          | term()
+
+  @spec default_limits() :: %{
+          tool_timeout_ms: pos_integer(),
+          max_iterations: pos_integer(),
+          tool_concurrency: pos_integer()
+        }
+  def default_limits, do: @default_limits
+
+  @spec run(Reflection.t(), map(), keyword()) :: {:ok, Artefact.t()} | {:error, map()}
   def run(%Reflection{} = reflection, ingestion, opts \\ []) when is_map(ingestion) do
+    limits!(opts)
+    run_steps(reflection, ingestion, step_runner(opts), opts)
+  end
+
+  @spec run_step(step_spec(), %{String.t() => term()}, keyword()) ::
+          {:ok, %{String.t() => term()}} | {:error, step_failure()}
+  def run_step(%{directions: directions, output: output} = spec, values, opts \\ [])
+      when is_binary(directions) and is_map(output) and is_map(values) and is_list(opts) do
+    limits!(opts)
+
+    case step(spec, ChainOfThought.interpolate(directions, values), %{}, step_runner(opts)) do
+      {:validated, result} -> result
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp step_runner(opts) do
     inference =
       Keyword.get_lazy(opts, :inference, fn ->
-        built_in = Keyword.take(opts, [:model_resolver, :observer, :reasoning_effort])
+        built_in =
+          Keyword.take(opts, [
+            :model_resolver,
+            :observer,
+            :reasoning_effort,
+            :tool_timeout_ms,
+            :max_iterations,
+            :tool_concurrency
+          ])
 
         run_step = if built_in[:observer], do: &observed_react/3, else: &react/3
 
         fn request -> default_inference(request, run_step, built_in) end
       end)
 
-    tool_executor = Keyword.get(opts, :tool_executor, &default_tool_executor/2)
-    tools = Keyword.get(opts, :tools, [])
-    tool_context = Keyword.get(opts, :tool_context, %{})
-
-    run_steps(reflection, ingestion, inference, tool_executor, tools, tool_context, opts)
+    %{
+      inference: inference,
+      tool_executor: Keyword.get(opts, :tool_executor, &default_tool_executor/2),
+      tools: Keyword.get(opts, :tools, []),
+      tool_context: Keyword.get(opts, :tool_context, %{}),
+      type_matcher: Keyword.get(opts, :type_matcher)
+    }
   end
 
-  defp run_steps(reflection, ingestion, inference, tool_executor, tools, tool_context, opts) do
+  defp step(spec, directions, extras, runner) do
+    request =
+      Map.merge(extras, %{
+        step: step_request(spec, directions),
+        directions: directions,
+        output_schema: spec.output,
+        tools: runner.tools,
+        tool_context: runner.tool_context,
+        tool_results: []
+      })
+
+    case infer_step(request, runner.inference, runner.tool_executor) do
+      {:ok, output} -> {:validated, validate_output(output, spec.output, runner.type_matcher)}
+      {:error, _reason} = error -> error
+    end
+  end
+
+  defp run_steps(reflection, ingestion, runner, opts) do
     observer = Keyword.get(opts, :observer, fn _event -> :ok end)
+
+    extras = %{
+      reflection: reflection.name,
+      operator_id: Map.get(ingestion, :operator_id) || Map.get(ingestion, "operator_id"),
+      invocation_id: field(ingestion, :id),
+      invocation_context: field(ingestion, :invocation_context) || %{},
+      representations: representations(ingestion)
+    }
 
     result =
       Enum.reduce_while(reflection.chain_of_thought.steps, {:ok, %{}}, fn step, {:ok, outputs} ->
         directions = ChainOfThought.interpolate(step.directions, outputs)
-
-        request = %{
-          reflection: reflection.name,
-          operator_id: Map.get(ingestion, :operator_id) || Map.get(ingestion, "operator_id"),
-          invocation_id: field(ingestion, :id),
-          invocation_context: field(ingestion, :invocation_context) || %{},
-          representations: representations(ingestion),
-          step: step_request(step, directions),
-          directions: directions,
-          output_schema: step.output,
-          tools: tools,
-          tool_context: tool_context,
-          tool_results: []
-        }
-
         final_step? = step == List.last(reflection.chain_of_thought.steps)
 
         observer.({:step_started, step.label})
 
-        case infer_step(request, inference, tool_executor) do
-          {:ok, output} ->
-            case validate_output(output, step.output, Keyword.get(opts, :type_matcher)) do
-              {:ok, normalized} ->
-                observer.({:step_finished, step.label})
-                {:cont, {:ok, Map.merge(outputs, normalized)}}
+        case step(step, directions, extras, runner) do
+          {:validated, {:ok, normalized}} ->
+            observer.({:step_finished, step.label})
+            {:cont, {:ok, Map.merge(outputs, normalized)}}
 
-              {:error, {:missing_output, _}} when final_step? ->
-                observer.({:step_failed, step.label})
-                {:halt, {:error, %{reflection: reflection.name, reason: :missing_artefact}}}
+          {:validated, {:error, {:missing_output, _}}} when final_step? ->
+            observer.({:step_failed, step.label})
+            {:halt, {:error, %{reflection: reflection.name, reason: :missing_artefact}}}
 
-              {:error, reason} ->
-                observer.({:step_failed, step.label})
-                {:halt, failure(reflection, step, reason)}
-            end
+          {:validated, {:error, reason}} ->
+            observer.({:step_failed, step.label})
+            {:halt, failure(reflection, step, reason)}
 
           {:error, reason} ->
             observer.({:step_failed, step.label})
@@ -120,18 +181,20 @@ defmodule Gralkor.Reflection.Runner do
 
   defp execute_tool(call, request, executor) do
     result =
-      executor.(call, %{
-        reflection: request.reflection,
-        operator_id: request.operator_id,
-        tools: request.tools,
-        tool_context: request.tool_context
-      })
+      executor.(
+        call,
+        request
+        |> Map.take([:reflection, :operator_id])
+        |> Map.merge(%{tools: request.tools, tool_context: request.tool_context})
+      )
 
     %{call: call, result: result}
   end
 
   defp step_request(step, directions) do
-    %{label: step.label, directions: directions}
+    step
+    |> Map.take([:label])
+    |> Map.put(:directions, directions)
     |> put_named(:model, Map.get(step, :model))
     |> put_named(:reasoning_effort, Map.get(step, :reasoning_effort))
   end
@@ -186,21 +249,7 @@ defmodule Gralkor.Reflection.Runner do
 
   def default_inference(request, run_step, opts)
       when is_function(run_step, 3) and is_list(opts) do
-    prompt = """
-    #{request.directions}
-
-    Lensed representations available to this Reflection step:
-    #{Jason.encode!(serializable_representations(request))}
-
-    Return only one JSON object satisfying this exact output contract:
-    #{Jason.encode!(request.output_schema)}
-
-    The quoted contract values are type declarations, not literal output
-    values. Emit actual JSON values of those types. In particular, an object
-    declaration such as "{ field: string }" requires a nested JSON object,
-    and an Array<...> declaration requires a JSON array; do not quote either.
-    """
-
+    limits = limits!(opts)
     step = Map.get(request, :step, %{})
 
     model =
@@ -210,31 +259,87 @@ defmodule Gralkor.Reflection.Runner do
 
     model_spec = "#{model.provider}:#{model.id}"
 
-    context = Map.put(request.tool_context, :operator_id, request.operator_id)
-
     config =
       reasoning_effort(
         %{
           model: model_spec,
           tools: request.tools,
           streaming: false,
-          max_iterations: 10,
+          max_iterations: limits.max_iterations,
           max_tokens: @max_output_tokens,
           temperature: 0.7,
-          tool_concurrency: 1,
+          tool_concurrency: limits.tool_concurrency,
           tool_max_retries: 0,
-          tool_timeout_ms: 30_000
+          tool_timeout_ms: limits.tool_timeout_ms
         },
         step_reasoning_effort(step, opts)
       )
 
-    react_opts = [context: context] ++ event_observer(opts)
+    react_opts = [context: tool_context(request)] ++ event_observer(opts)
 
-    case run_until_settled(run_step, prompt, config, react_opts, @dropped_call_retry_delays_ms) do
-      %{termination_reason: :final_answer, result: result} -> decode_final_output(%{text: result})
-      %{termination_reason: :failed, result: reason} -> {:error, reason}
-      %{termination_reason: termination_reason} -> {:error, termination_reason}
+    case run_until_settled(
+           run_step,
+           prompt(request),
+           config,
+           react_opts,
+           @dropped_call_retry_delays_ms
+         ) do
+      %{termination_reason: :final_answer, result: result} ->
+        decode_final_output(%{text: result})
+
+      %{termination_reason: :failed, result: reason} ->
+        {:error, reason}
+
+      %{termination_reason: nil, trace: trace} = run ->
+        if Enum.any?(trace, &(&1.kind in @terminal_kinds)),
+          do: {:error, run.termination_reason},
+          else: {:error, {:no_response_within, limits.tool_timeout_ms + @no_response_margin_ms}}
+
+      %{termination_reason: termination_reason} ->
+        {:error, termination_reason}
     end
+  end
+
+  defp prompt(request) do
+    """
+    #{request.directions}
+    #{representations_section(request)}
+    Return only one JSON object satisfying this exact output contract:
+    #{Jason.encode!(request.output_schema)}
+
+    The quoted contract values are type declarations, not literal output
+    values. Emit actual JSON values of those types. In particular, an object
+    declaration such as "{ field: string }" requires a nested JSON object,
+    and an Array<...> declaration requires a JSON array; do not quote either.
+    """
+  end
+
+  defp representations_section(%{representations: _} = request) do
+    """
+
+    Lensed representations available to this Reflection step:
+    #{Jason.encode!(serializable_representations(request))}
+    """
+  end
+
+  defp representations_section(_request), do: ""
+
+  defp tool_context(%{operator_id: operator_id, tool_context: tool_context}),
+    do: Map.put(tool_context, :operator_id, operator_id)
+
+  defp tool_context(%{tool_context: tool_context}), do: tool_context
+
+  defp limits!(opts) do
+    Map.new(@default_limits, fn {limit, default} ->
+      case Keyword.get(opts, limit, default) do
+        value when is_integer(value) and value > 0 ->
+          {limit, value}
+
+        value ->
+          raise ArgumentError,
+                "#{inspect(limit)} must be a positive integer, got: #{inspect(value)}"
+      end
+    end)
   end
 
   defp step_reasoning_effort(%{reasoning_effort: effort}, _opts), do: {:ok, effort}
@@ -301,37 +406,111 @@ defmodule Gralkor.Reflection.Runner do
 
     input
     |> react_events(config, opts)
-    |> Stream.each(on_event)
+    |> observed_events(on_event)
     |> Jido.AI.Reasoning.ReAct.collect_stream()
+  end
+
+  @doc false
+  @spec observed_events(Enumerable.t(), (term() -> any())) :: Enumerable.t()
+  def observed_events(events, on_event) when is_function(on_event, 1) do
+    Stream.transform(
+      events,
+      fn -> %{open: %{}, ended?: false} end,
+      fn event, state -> {[event], observe_event(event, state, on_event)} end,
+      fn state -> {[], observe_end(state, on_event)} end,
+      fn _state -> :ok end
+    )
+  end
+
+  defp observe_event(%Jido.AI.Runtime.Event{kind: :llm_started} = event, state, on_event) do
+    on_event.(event)
+    %{state | open: Map.put(state.open, event.llm_call_id, event.at_ms)}
+  end
+
+  defp observe_event(%Jido.AI.Runtime.Event{kind: :llm_completed} = event, state, on_event) do
+    {started_at_ms, open} = Map.pop!(state.open, event.llm_call_id)
+
+    on_event.(
+      {:model_request_finished,
+       %{
+         id: event.llm_call_id,
+         duration_ms: event.at_ms - started_at_ms,
+         usage: event.data[:usage]
+       }}
+    )
+
+    %{state | open: open}
+  end
+
+  defp observe_event(%Jido.AI.Runtime.Event{kind: :request_failed} = event, state, on_event) do
+    fail_open_requests(state.open, event.at_ms, on_event)
+    %{state | open: %{}, ended?: true}
+  end
+
+  defp observe_event(%Jido.AI.Runtime.Event{kind: kind}, state, _on_event)
+       when kind in @terminal_kinds,
+       do: %{state | ended?: true}
+
+  defp observe_event(event, state, on_event) do
+    on_event.(event)
+    state
+  end
+
+  defp observe_end(%{ended?: false, open: open} = state, on_event) do
+    fail_open_requests(open, System.system_time(:millisecond), on_event)
+    %{state | open: %{}}
+  end
+
+  defp observe_end(state, _on_event), do: state
+
+  defp fail_open_requests(open, at_ms, on_event) do
+    Enum.each(open, fn {id, started_at_ms} ->
+      on_event.({:model_request_failed, %{id: id, duration_ms: at_ms - started_at_ms}})
+    end)
   end
 
   defp event_observer(opts) do
     case Keyword.fetch(opts, :observer) do
-      {:ok, observer} -> [on_event: &tell_tool_event(observer, &1)]
+      {:ok, observer} -> [on_event: &tell(observer, &1)]
       :error -> []
     end
   end
 
-  defp tell_tool_event(observer, %Jido.AI.Runtime.Event{kind: :tool_started} = event) do
+  defp tell(observer, %Jido.AI.Runtime.Event{kind: :llm_started} = event) do
+    observer.({:model_request_started, %{id: event.llm_call_id, model: event.data[:model]}})
+  end
+
+  defp tell(observer, %Jido.AI.Runtime.Event{kind: :tool_started} = event) do
     observer.(
       {:tool_started,
        %{id: event.tool_call_id, name: event.tool_name, arguments: event.data[:arguments]}}
     )
   end
 
-  defp tell_tool_event(observer, %Jido.AI.Runtime.Event{kind: :tool_completed} = event) do
+  defp tell(observer, %Jido.AI.Runtime.Event{kind: :tool_completed} = event) do
     observer.(
       {:tool_completed,
        %{
          id: event.tool_call_id,
          name: event.tool_name,
          duration_ms: event.data[:duration_ms],
-         ok?: succeeded?(event.data[:result])
+         ok?: succeeded?(event.data[:result]),
+         result: model_text(event.data[:result])
        }}
     )
   end
 
-  defp tell_tool_event(_observer, _event), do: :ok
+  defp tell(observer, {kind, %{id: _}} = telling)
+       when kind in [:model_request_finished, :model_request_failed],
+       do: observer.(telling)
+
+  defp tell(_observer, _event), do: :ok
+
+  defp model_text(result) do
+    result
+    |> Jido.AI.Turn.format_tool_result_content()
+    |> Jido.AI.Turn.extract_from_content()
+  end
 
   defp succeeded?({:ok, _value}), do: true
   defp succeeded?({:ok, _value, _effects}), do: true

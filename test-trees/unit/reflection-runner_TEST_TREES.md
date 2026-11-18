@@ -90,5 +90,58 @@ when built-in inference is invoked for a step
       then the observer is told the call's identifier, tool name, and arguments
     when the ReAct runtime completes a tool call
       then the observer is told the call's identifier, tool name, duration, and whether it succeeded
+      and the observer is told the text the model receives as the call's result
+      where that text is made of several content parts
+        then the observer is told the text of those parts joined
     when the ReAct runtime emits any other event
       then the observer is told nothing
+  where the request carries no representations
+    then the prompt carries the directions and the output contract and no representations section
+  where the request carries no operator
+    then the tool context is exactly the supplied tool context
+  where a time allowed for a tool call, a limit on rounds of tool use, and a limit on tool calls at once are supplied
+    then the ReAct runtime is given exactly those limits
+  where no limits are supplied
+    then the ReAct runtime is given the Runner's default limits
+  if a supplied limit is not a positive integer
+    then built-in inference raises naming the limit and the value
+  if the event stream ends while the run neither completed, failed, nor was cancelled
+    then built-in inference fails naming the time it waited for a response
+
+where built-in inference has an observer
+  when a model request starts
+    then the observer is told the request's identifier and model
+    when that request completes
+      then the observer is told the request's identifier, the time from its start to its completion, and its token use
+    if the run fails while that request is open
+      then the observer is told the request's identifier, the time from its start to the failure, and that it failed
+    if the stream ends before the run ends, with that request open
+      then the observer is told that request failed, with its identifier and the time until the stream ended
+  if the run fails while no model request is open
+    then the observer is told of no failed model request
+
+when the Runner runs one step on its own
+  then inference receives the step's directions with references filled in from the supplied values
+  and inference receives the step's output contract, the supplied tools, and the supplied tool context
+  and inference receives no Reflection name, operator, invocation identifier, invocation context, or representations
+  where the step names a model or a reasoning effort
+    then the step's request carries the model and reasoning effort it names
+  when inference returns wrapped tool calls
+    then each call is executed with its model-produced arguments and exactly the supplied tool context
+    and each result is returned to inference within the same step
+  when inference returns wrapped structured output satisfying the step's exact contract
+    then the Runner returns exactly that output
+  if inference omits a declared output
+    then the Runner failure is the missing key alone
+  if inference returns an undeclared output
+    then the Runner failure is the unexpected key alone
+  if inference returns a value of the wrong declared type
+    then the Runner failure is the key and type alone
+  if inference fails or returns an invalid response
+    then the Runner failure is the reason alone
+  where an observer is supplied
+    then the observer is told of no step starting, finishing, or failing
+
+where the Runner runs a Reflection or one step on its own with a limit that is not a positive integer
+  then the Runner raises naming the limit and the value
+  and no inference is requested

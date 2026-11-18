@@ -50,6 +50,125 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
     use Gralkor.Ontology, entities: :open, relationships: :open
   end
 
+  defmodule StepProbe do
+    use Jido.Action,
+      name: "step_probe",
+      description: "Record a step's tool evidence.",
+      schema: Zoi.object(%{value: Zoi.string()})
+
+    def run(%{value: value}, context) do
+      send(context.test_pid, {:step_tool, value, context})
+      {:ok, %{evidence: value}}
+    end
+  end
+
+  defmodule HeldTool do
+    use Jido.Action,
+      name: "held_tool",
+      description: "Wait until the test releases it.",
+      schema: Zoi.object(%{value: Zoi.string()})
+
+    def run(%{value: value}, context) do
+      send(context.test_pid, {:tool_running, value, self()})
+
+      receive do
+        :release -> {:ok, %{released: value}}
+      end
+    end
+  end
+
+  defmodule ScriptedModel do
+    @usage %{"input_tokens" => 3, "output_tokens" => 4, "total_tokens" => 7}
+
+    def start_link(test_pid, replies) do
+      Agent.start_link(fn -> %{test_pid: test_pid, replies: replies, count: 0} end,
+        name: __MODULE__
+      )
+    end
+
+    def replace(test_pid, replies) do
+      Agent.update(__MODULE__, fn _ -> %{test_pid: test_pid, replies: replies, count: 0} end)
+    end
+
+    def run(request) do
+      body = request.body |> IO.iodata_to_binary() |> Jason.decode!()
+      {test_pid, reply, count} = Agent.get_and_update(__MODULE__, &next/1)
+      send(test_pid, {:scripted_model_request, body})
+      respond(request, reply, count)
+    end
+
+    defp next(%{replies: [{:always, reply}]} = state),
+      do: {{state.test_pid, reply, state.count}, %{state | count: state.count + 1}}
+
+    defp next(%{replies: [reply | rest]} = state),
+      do: {{state.test_pid, reply, state.count}, %{state | replies: rest, count: state.count + 1}}
+
+    defp respond(request, :hold, _count) do
+      receive do
+        :never_sent -> {request, Req.Response.new(status: 500)}
+      end
+    end
+
+    defp respond(request, {:fail, status}, _count) do
+      {request,
+       Req.Response.new(
+         status: status,
+         headers: [{"content-type", "application/json"}],
+         body:
+           Jason.encode!(%{
+             "error" => %{"message" => "scripted provider failure", "type" => "invalid_request"}
+           })
+       )}
+    end
+
+    defp respond(request, {:answer, text}, _count) do
+      ok(request, [
+        %{
+          "type" => "message",
+          "id" => "message-1",
+          "role" => "assistant",
+          "status" => "completed",
+          "content" => [%{"type" => "output_text", "text" => text, "annotations" => []}]
+        }
+      ])
+    end
+
+    defp respond(request, {:tool_calls, calls}, count) do
+      ok(
+        request,
+        calls
+        |> Enum.with_index(1)
+        |> Enum.map(fn {{name, arguments}, index} ->
+          %{
+            "type" => "function_call",
+            "id" => "fc-#{count}-#{index}",
+            "call_id" => "call-#{count}-#{index}",
+            "name" => name,
+            "arguments" => Jason.encode!(arguments),
+            "status" => "completed"
+          }
+        end)
+      )
+    end
+
+    defp ok(request, output) do
+      {request,
+       Req.Response.new(
+         status: 200,
+         headers: [{"content-type", "application/json"}],
+         body:
+           Jason.encode!(%{
+             "id" => "response-1",
+             "object" => "response",
+             "model" => "gpt-5",
+             "status" => "completed",
+             "output" => output,
+             "usage" => @usage
+           })
+       )}
+    end
+  end
+
   defmodule FailingReflectionStorage do
     def put_artefact(_, _, _, _), do: {:error, :destination_unavailable}
     def get_artefact(_, _, _, _), do: {:error, :not_found}
@@ -1675,6 +1794,751 @@ defmodule Gralkor.ReflectionSystemFunctionalTest do
                Gralkor.Artefact.id_for("owner", "personal-reflection-invocation", "lessons")
     end
   end
+
+  describe "when the Runner runs one step on its own" do
+    test "then built-in inference receives the step's declared output contract" do
+      assert step_inference_request().output_schema == %{"answer" => "string"}
+    end
+
+    test "and built-in inference receives the supplied tools" do
+      assert step_inference_request().tools == [StepProbe]
+    end
+
+    test "and built-in inference receives no Reflection name" do
+      refute Map.has_key?(step_inference_request(), :reflection)
+    end
+
+    test "and built-in inference receives no representations" do
+      refute Map.has_key?(step_inference_request(), :representations)
+      script_model([{:answer, ~s({"answer":"done"})}])
+      assert {:ok, _} = Runner.run_step(scripted_step(), %{}, [])
+      assert [body] = model_bodies()
+      refute user_prompt(body) =~ "representations"
+    end
+  end
+
+  describe "when the Runner runs one step on its own > when the model asks for a supplied tool" do
+    test "then that tool executes with exactly the supplied tool context" do
+      tool_context = %{test_pid: self(), session_id: "session-one", operator_id: "caller-value"}
+
+      script_model([
+        {:tool_calls, [{"step_probe", %{"value" => "first"}}]},
+        {:answer, ~s({"answer":"done"})}
+      ])
+
+      assert {:ok, _} =
+               Runner.run_step(scripted_step(), %{},
+                 tools: [StepProbe],
+                 tool_context: tool_context
+               )
+
+      assert_receive {:step_tool, "first", context}
+      assert Map.take(context, Map.keys(tool_context)) == tool_context
+
+      script_model([
+        {:tool_calls, [{"step_probe", %{"value" => "second"}}]},
+        {:answer, ~s({"answer":"done"})}
+      ])
+
+      assert {:ok, _} =
+               Runner.run_step(scripted_step(), %{},
+                 tools: [StepProbe],
+                 tool_context: %{test_pid: self()}
+               )
+
+      assert_receive {:step_tool, "second", context}
+      refute Map.has_key?(context, :operator_id)
+    end
+  end
+
+  describe "when the Runner runs one step on its own > where a reference in the directions names a supplied value > where the value is a string" do
+    test "then built-in inference receives the directions with that reference replaced by the string" do
+      assert step_directions("Review {{ ticket }}.", %{"ticket" => "OPS-12"}) == "Review OPS-12."
+    end
+  end
+
+  describe "when the Runner runs one step on its own > where a reference in the directions names a supplied value > where the value is not a string" do
+    test "then built-in inference receives the directions with that reference replaced by the value's JSON encoding" do
+      assert step_directions("Review {{ tickets }}.", %{"tickets" => ["OPS-12", 3]}) ==
+               ~s(Review ["OPS-12",3].)
+    end
+  end
+
+  describe "when the Runner runs one step on its own > where a reference in the directions names a supplied value > where the value holds a reference naming another supplied value" do
+    test "then that inner reference reaches the model as written" do
+      values = %{"ticket" => "see {{ other }}", "other" => "OPS-13"}
+
+      assert step_prompt("Review {{ ticket }}.", values) ==
+               run_step_prompt("Review see {{ other }}.", %{"answer" => "string"})
+    end
+  end
+
+  describe "when the Runner runs one step on its own > where a reference in the directions names no supplied value" do
+    test "then that reference reaches the model as written" do
+      assert step_prompt("Review {{ missing }}.", %{"ticket" => "OPS-12"}) ==
+               run_step_prompt("Review {{ missing }}.", %{"answer" => "string"})
+    end
+  end
+
+  describe "when the Runner runs one step on its own > where the directions hold an unclosed double brace ahead of a reference naming a supplied value" do
+    test "then that reference is filled in from its value" do
+      assert step_prompt("For {{Ana. Review {{ ticket }}.", %{"ticket" => "OPS-12"}) =~
+               "Review OPS-12."
+    end
+
+    test "and the unclosed double brace reaches the model as written" do
+      assert step_prompt("For {{Ana. Review {{ ticket }}.", %{"ticket" => "OPS-12"}) ==
+               run_step_prompt("For {{Ana. Review OPS-12.", %{"answer" => "string"})
+    end
+  end
+
+  describe "when the Runner runs one step on its own > where the step is given a model" do
+    test "then every model request of the step runs that model" do
+      script_model([
+        {:tool_calls, [{"step_probe", %{"value" => "first"}}]},
+        {:answer, ~s({"answer":"done"})}
+      ])
+
+      assert {:ok, _} =
+               Runner.run_step(scripted_step(), %{},
+                 tools: [StepProbe],
+                 tool_context: %{test_pid: self()}
+               )
+
+      assert [first, second] = model_bodies()
+      assert first["model"] == "gpt-5"
+      assert second["model"] == "gpt-5"
+    end
+  end
+
+  describe "when the Runner runs one step on its own > where the step is given no model" do
+    test "then every model request of the step runs Gralkor's configured LLM model" do
+      previous = System.get_env("GRALKOR_LLM_MODEL")
+      System.put_env("GRALKOR_LLM_MODEL", "openai:gpt-5-mini")
+
+      on_exit(fn ->
+        if previous,
+          do: System.put_env("GRALKOR_LLM_MODEL", previous),
+          else: System.delete_env("GRALKOR_LLM_MODEL")
+      end)
+
+      script_model([
+        {:tool_calls, [{"step_probe", %{"value" => "first"}}]},
+        {:answer, ~s({"answer":"done"})}
+      ])
+
+      assert {:ok, _} =
+               Runner.run_step(Map.delete(scripted_step(), :model), %{},
+                 tools: [StepProbe],
+                 tool_context: %{test_pid: self()}
+               )
+
+      configured = Gralkor.Config.llm_model()
+      assert Enum.map(model_bodies(), & &1["model"]) == [configured.id, configured.id]
+    end
+  end
+
+  describe "when the Runner runs one step on its own > where the step is given a reasoning effort" do
+    test "then every model request of the step asks for that reasoning effort" do
+      script_model([
+        {:tool_calls, [{"step_probe", %{"value" => "first"}}]},
+        {:answer, ~s({"answer":"done"})}
+      ])
+
+      assert {:ok, _} =
+               Runner.run_step(Map.put(scripted_step(), :reasoning_effort, :low), %{},
+                 tools: [StepProbe],
+                 tool_context: %{test_pid: self()}
+               )
+
+      assert Enum.map(model_bodies(), & &1["reasoning"]) == [
+               %{"effort" => "low"},
+               %{"effort" => "low"}
+             ]
+    end
+  end
+
+  describe "when the Runner runs one step on its own > where the step is given no reasoning effort" do
+    test "then no model request of the step names a reasoning effort" do
+      script_model([
+        {:tool_calls, [{"step_probe", %{"value" => "first"}}]},
+        {:answer, ~s({"answer":"done"})}
+      ])
+
+      assert {:ok, _} =
+               Runner.run_step(scripted_step(), %{},
+                 tools: [StepProbe],
+                 tool_context: %{test_pid: self()}
+               )
+
+      assert [first, second] = model_bodies()
+      refute Map.has_key?(first, "reasoning")
+      refute Map.has_key?(second, "reasoning")
+    end
+  end
+
+  describe "when the Runner runs one step on its own > when the model returns structured output satisfying the step's declared output contract" do
+    test "then the Runner returns exactly those outputs" do
+      script_model([{:answer, ~s({"answer":"done"})}])
+      assert Runner.run_step(scripted_step(), %{}, []) == {:ok, %{"answer" => "done"}}
+    end
+
+    test "and the Runner returns no artefact" do
+      script_model([{:answer, ~s({"answer":"done"})}])
+      assert {:ok, outputs} = Runner.run_step(scripted_step(), %{}, [])
+      refute is_struct(outputs)
+    end
+  end
+
+  describe "when the Runner runs one step on its own > if a declared output key is missing" do
+    test "then the step fails identifying the missing key" do
+      script_model([{:answer, ~s({})}])
+
+      assert Runner.run_step(scripted_step(), %{}, []) ==
+               {:error, {:missing_output, "answer"}}
+    end
+  end
+
+  describe "when the Runner runs one step on its own > if an undeclared output key is returned" do
+    test "then the step fails identifying the unexpected key" do
+      script_model([{:answer, ~s({"answer":"done","extra":"kept"})}])
+
+      assert Runner.run_step(scripted_step(), %{}, []) ==
+               {:error, {:unexpected_output, "extra"}}
+    end
+  end
+
+  describe "when the Runner runs one step on its own > if an output value does not satisfy its declared type" do
+    test "then the step fails identifying the key and type" do
+      script_model([{:answer, ~s({"answer":3})}])
+
+      assert Runner.run_step(scripted_step(), %{}, []) ==
+               {:error, {:output_type_mismatch, "answer", "string"}}
+    end
+  end
+
+  describe "when the Runner runs one step on its own > if the model request fails" do
+    test "then the step fails identifying the provider failure" do
+      script_model([{:fail, 400}])
+
+      assert {:error, %ReqLLM.Error.API.Request{status: 400}} =
+               Runner.run_step(scripted_step(), %{}, [])
+    end
+  end
+
+  describe "when the Runner runs one step on its own > if the model returns invalid JSON or a non-object JSON value" do
+    test "then the step fails identifying the invalid structured output" do
+      for text <- ["not JSON", "[1,2]"] do
+        script_model([{:answer, text}])
+
+        assert {:error, {:invalid_structured_output, _}} =
+                 Runner.run_step(scripted_step(), %{}, [])
+      end
+    end
+  end
+
+  describe "when the Runner runs one step on its own > if the model and tool loop reaches its iteration limit without a final answer" do
+    test "then the step fails identifying the exhausted iteration limit" do
+      script_model([{:always, {:tool_calls, [{"step_probe", %{"value" => "again"}}]}}])
+
+      assert Runner.run_step(scripted_step(), %{},
+               tools: [StepProbe],
+               tool_context: %{test_pid: self()}
+             ) == {:error, :max_iterations}
+    end
+  end
+
+  describe "when the Runner runs one step on its own > if the step fails" do
+    test "then its failure names no Reflection and no step" do
+      for reply <- [{:answer, ~s({})}, {:answer, "not JSON"}, {:fail, 400}] do
+        script_model([reply])
+        assert {:error, reason} = Runner.run_step(scripted_step(), %{}, [])
+        refute is_map(reason) and Map.has_key?(reason, :reflection)
+        refute is_map(reason) and Map.has_key?(reason, :step)
+      end
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own with an observer > when built-in inference starts a model request" do
+    test "then the observer is told the request's identifier" do
+      prove_model_request_started(:reflection)
+      prove_model_request_started(:step)
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own with an observer > when built-in inference starts a model request > when that model request finishes" do
+    test "then the observer is told the request's identifier, its duration, and its token use" do
+      prove_model_request_finished(:reflection)
+      prove_model_request_finished(:step)
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own with an observer > when built-in inference starts a model request > if that model request fails" do
+    test "then the observer is told the request's identifier, its duration, and that it failed" do
+      prove_model_request_failed(:reflection)
+      prove_model_request_failed(:step)
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own with an observer > when built-in inference starts a model request > if that model request gets no answer in the time allowed" do
+    @tag timeout: 300_000
+    test "then the observer is told the request's identifier, its duration, and that it failed" do
+      prove_model_request_unanswered(:reflection)
+      prove_model_request_unanswered(:step)
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own with an observer > when built-in inference starts a tool call" do
+    test "then the observer is told the call's identifier, tool name, and arguments" do
+      prove_tool_started(:reflection)
+      prove_tool_started(:step)
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own with an observer > when built-in inference starts a tool call > when that tool call completes" do
+    test "then the observer is told the call's identifier, tool name, duration, and whether it succeeded" do
+      prove_tool_completed(:reflection)
+      prove_tool_completed(:step)
+    end
+
+    test "and the observer is told the call's result as the model receives it" do
+      prove_tool_result_told(:reflection)
+      prove_tool_result_told(:step)
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own with a time allowed for a tool call > if a tool call runs longer than that time" do
+    test "then that tool call fails" do
+      prove_tool_call_timed_out(:reflection, tool_timeout_ms: 200)
+      prove_tool_call_timed_out(:step, tool_timeout_ms: 200)
+    end
+
+    test "and the model receives that failure within the same step" do
+      prove_timeout_reaches_model(:reflection, tool_timeout_ms: 200)
+      prove_timeout_reaches_model(:step, tool_timeout_ms: 200)
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own without being given a time allowed for a tool call > if a tool call runs longer than the default time" do
+    @tag timeout: 300_000
+    test "then that tool call fails" do
+      prove_tool_call_timed_out(:reflection, [])
+      prove_tool_call_timed_out(:step, [])
+    end
+
+    @tag timeout: 300_000
+    test "and the model receives that failure within the same step" do
+      prove_timeout_reaches_model(:reflection, [])
+      prove_timeout_reaches_model(:step, [])
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own with a limit on rounds of tool use in a step > if the model keeps asking for tools beyond that many rounds" do
+    test "then the step fails identifying the exhausted iteration limit" do
+      prove_iteration_limit_failure(:reflection, max_iterations: 3)
+      prove_iteration_limit_failure(:step, max_iterations: 3)
+    end
+
+    test "and the model receives no more requests in that step than that limit" do
+      prove_requests_within_limit(:reflection, [max_iterations: 3], 3)
+      prove_requests_within_limit(:step, [max_iterations: 3], 3)
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own without being given a limit on rounds of tool use in a step > if the model keeps asking for tools beyond the default number of rounds" do
+    test "then the step fails identifying the exhausted iteration limit" do
+      prove_iteration_limit_failure(:reflection, [])
+      prove_iteration_limit_failure(:step, [])
+    end
+
+    test "and the model receives no more requests in that step than the default number" do
+      prove_requests_within_limit(:reflection, [], Runner.default_limits().max_iterations)
+      prove_requests_within_limit(:step, [], Runner.default_limits().max_iterations)
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own with a limit on tool calls at once > when the model asks for more tool calls in one answer than that limit" do
+    test "then no more than that limit of them run at the same time" do
+      prove_at_most_at_once(:reflection, [tool_concurrency: 2], 2)
+      prove_at_most_at_once(:step, [tool_concurrency: 2], 2)
+    end
+
+    test "and as many of them as that limit run at the same time" do
+      prove_as_many_at_once(:reflection, [tool_concurrency: 2], 2)
+      prove_as_many_at_once(:step, [tool_concurrency: 2], 2)
+    end
+
+    test "and the model receives every one of their results within the same step" do
+      prove_every_result_received(:reflection, [tool_concurrency: 2], 2)
+      prove_every_result_received(:step, [tool_concurrency: 2], 2)
+    end
+  end
+
+  describe "where the Runner runs a Reflection or one step on its own without being given a limit on tool calls at once > when the model asks for more tool calls in one answer than the default limit" do
+    test "then no more than the default limit of them run at the same time" do
+      prove_at_most_at_once(:reflection, [], Runner.default_limits().tool_concurrency)
+      prove_at_most_at_once(:step, [], Runner.default_limits().tool_concurrency)
+    end
+
+    test "and as many of them as the default limit run at the same time" do
+      prove_as_many_at_once(:reflection, [], Runner.default_limits().tool_concurrency)
+      prove_as_many_at_once(:step, [], Runner.default_limits().tool_concurrency)
+    end
+
+    test "and the model receives every one of their results within the same step" do
+      prove_every_result_received(:reflection, [], Runner.default_limits().tool_concurrency)
+      prove_every_result_received(:step, [], Runner.default_limits().tool_concurrency)
+    end
+  end
+
+  defp prove_model_request_started(entry) do
+    script_model([{:answer, ~s({"answer":"done"})}])
+    {_result, told} = observed_entry(entry, [])
+
+    assert [{:model_request_started, %{id: id, model: "openai:gpt-5"}}] =
+             model_tellings(told, :model_request_started)
+
+    assert is_binary(id)
+  end
+
+  defp prove_model_request_finished(entry) do
+    script_model([{:answer, ~s({"answer":"done"})}])
+    {_result, told} = observed_entry(entry, [])
+    assert [{:model_request_started, %{id: id}}] = model_tellings(told, :model_request_started)
+
+    assert [{:model_request_finished, %{id: ^id, duration_ms: duration, usage: usage}}] =
+             model_tellings(told, :model_request_finished)
+
+    assert is_integer(duration) and duration >= 0
+    assert %{input_tokens: 3, output_tokens: 4} = usage
+  end
+
+  defp prove_model_request_failed(entry) do
+    script_model([{:fail, 400}])
+    {_result, told} = observed_entry(entry, [])
+    assert [{:model_request_started, %{id: id}}] = model_tellings(told, :model_request_started)
+
+    assert [{:model_request_failed, %{id: ^id, duration_ms: duration}}] =
+             model_tellings(told, :model_request_failed)
+
+    assert is_integer(duration) and duration >= 0
+    assert [] = model_tellings(told, :model_request_finished)
+  end
+
+  defp prove_model_request_unanswered(entry) do
+    script_model([:hold])
+    {_result, told} = observed_entry(entry, tool_timeout_ms: 1)
+    assert [{:model_request_started, %{id: id}}] = model_tellings(told, :model_request_started)
+
+    assert [{:model_request_failed, %{id: ^id, duration_ms: duration}}] =
+             model_tellings(told, :model_request_failed)
+
+    assert duration >= 60_001
+    assert [] = model_tellings(told, :model_request_finished)
+  end
+
+  defp prove_tool_started(entry) do
+    script_model([
+      {:tool_calls, [{"step_probe", %{"value" => "first"}}]},
+      {:answer, ~s({"answer":"done"})}
+    ])
+
+    {_result, told} = observed_entry(entry, [])
+
+    assert [{:tool_started, %{id: "call-0-1", name: "step_probe", arguments: arguments}}] =
+             model_tellings(told, :tool_started)
+
+    assert arguments == %{"value" => "first"}
+  end
+
+  defp prove_tool_completed(entry) do
+    script_model([
+      {:tool_calls, [{"step_probe", %{"value" => "first"}}]},
+      {:answer, ~s({"answer":"done"})}
+    ])
+
+    {_result, told} = observed_entry(entry, [])
+
+    assert [
+             {:tool_completed,
+              %{id: "call-0-1", name: "step_probe", duration_ms: duration, ok?: true}}
+           ] = model_tellings(told, :tool_completed)
+
+    assert is_integer(duration) and duration >= 0
+  end
+
+  defp prove_tool_result_told(entry) do
+    script_model([
+      {:tool_calls, [{"step_probe", %{"value" => "first"}}]},
+      {:answer, ~s({"answer":"done"})}
+    ])
+
+    {_result, told} = observed_entry(entry, [])
+    assert [{:tool_completed, %{result: result}}] = model_tellings(told, :tool_completed)
+    assert [_first, second] = model_bodies()
+    assert [%{"call_id" => "call-0-1", "output" => ^result}] = tool_outputs(second)
+  end
+
+  defp prove_tool_call_timed_out(entry, opts) do
+    script_model([
+      {:tool_calls, [{"held_tool", %{"value" => "slow"}}]},
+      {:answer, ~s({"answer":"done"})}
+    ])
+
+    started = System.monotonic_time(:millisecond)
+    assert {:ok, _} = run_entry(entry, opts)
+
+    assert System.monotonic_time(:millisecond) - started >=
+             Keyword.get(opts, :tool_timeout_ms, Runner.default_limits().tool_timeout_ms)
+
+    assert [_first, second] = model_bodies()
+    assert [%{"output" => output}] = tool_outputs(second)
+    assert %{"ok" => false} = Jason.decode!(output)
+  end
+
+  defp prove_timeout_reaches_model(entry, opts) do
+    script_model([
+      {:tool_calls, [{"held_tool", %{"value" => "slow"}}]},
+      {:answer, ~s({"answer":"done"})}
+    ])
+
+    assert {:ok, _} = run_entry(entry, opts)
+    assert [first, second] = model_bodies()
+    assert user_prompt(first) == user_prompt(second)
+    assert [%{"call_id" => "call-0-1", "output" => output}] = tool_outputs(second)
+    assert %{"ok" => false, "error" => %{"type" => "timeout"}} = Jason.decode!(output)
+  end
+
+  defp prove_iteration_limit_failure(entry, opts) do
+    script_model([{:always, {:tool_calls, [{"step_probe", %{"value" => "again"}}]}}])
+    assert {:error, failure} = run_entry(entry, opts)
+    assert step_failure(entry, failure) == :max_iterations
+  end
+
+  defp prove_requests_within_limit(entry, opts, limit) do
+    script_model([{:always, {:tool_calls, [{"step_probe", %{"value" => "again"}}]}}])
+    assert {:error, _} = run_entry(entry, opts)
+    assert length(model_bodies()) == limit
+  end
+
+  defp prove_at_most_at_once(entry, opts, limit) do
+    assert {{:ok, _}, peak} = held_round(entry, limit + 1, opts)
+    assert peak <= limit
+  end
+
+  defp prove_as_many_at_once(entry, opts, limit) do
+    assert {{:ok, _}, ^limit} = held_round(entry, limit + 1, opts)
+  end
+
+  defp prove_every_result_received(entry, opts, limit) do
+    assert {{:ok, _}, _peak} = held_round(entry, limit + 1, opts)
+    assert [first, second] = model_bodies()
+    assert user_prompt(first) == user_prompt(second)
+
+    assert Enum.map(tool_outputs(second), & &1["call_id"]) ==
+             Enum.map(1..(limit + 1), &"call-0-#{&1}")
+  end
+
+  defp scripted_step do
+    %{
+      directions: "Answer the question.",
+      output: %{"answer" => "string"},
+      model: %{provider: :openai, id: "gpt-5"}
+    }
+  end
+
+  defp scripted_reflection_step do
+    %Gralkor.Reflection{
+      name: "scripted",
+      outputs: [],
+      chain_of_thought: %Gralkor.Reflection.ChainOfThought{
+        steps: [
+          %Gralkor.Reflection.ChainOfThought.Step{
+            label: "answer",
+            directions: "Answer the question.",
+            output: %{"answer" => "string"},
+            model: %{provider: :openai, id: "gpt-5"}
+          }
+        ]
+      }
+    }
+  end
+
+  defp run_entry(entry, opts) do
+    runner_opts =
+      Keyword.merge(
+        [tools: [StepProbe, HeldTool], tool_context: %{test_pid: self()}],
+        opts
+      )
+
+    case entry do
+      :reflection ->
+        Runner.run(
+          scripted_reflection_step(),
+          %{id: "scripted-run", operator_id: "operator-one", representations: []},
+          runner_opts
+        )
+
+      :step ->
+        Runner.run_step(scripted_step(), %{}, runner_opts)
+    end
+  end
+
+  defp observed_entry(entry, opts) do
+    test_pid = self()
+    result = run_entry(entry, Keyword.put(opts, :observer, &send(test_pid, {:told, &1})))
+    {result, drain_tellings([])}
+  end
+
+  defp drain_tellings(acc) do
+    receive do
+      {:told, telling} -> drain_tellings([telling | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
+  defp model_tellings(told, kind), do: Enum.filter(told, &match?({^kind, _}, &1))
+
+  defp step_failure(:reflection, %{reason: reason}), do: reason
+  defp step_failure(:step, reason), do: reason
+
+  defp held_round(entry, calls, opts) do
+    script_model([
+      {:tool_calls, Enum.map(1..calls, &{"held_tool", %{"value" => "held-#{&1}"}})},
+      {:answer, ~s({"answer":"done"})}
+    ])
+
+    test_pid = self()
+
+    task =
+      Task.async(fn ->
+        run_entry(entry, Keyword.put(opts, :tool_context, %{test_pid: test_pid}))
+      end)
+
+    peak = peak_running(calls, [], 0, 0)
+    {Task.await(task, 30_000), peak}
+  end
+
+  defp peak_running(total, [], total, peak), do: peak
+
+  defp peak_running(total, [], seen, peak) do
+    receive do
+      {:tool_running, _value, pid} -> peak_running(total, [pid], seen + 1, max(peak, 1))
+    after
+      10_000 -> flunk("#{seen} of #{total} tool calls ran")
+    end
+  end
+
+  defp peak_running(total, running, seen, peak) do
+    receive do
+      {:tool_running, _value, pid} ->
+        running = [pid | running]
+        peak_running(total, running, seen + 1, max(peak, length(running)))
+    after
+      500 ->
+        Enum.each(running, &send(&1, :release))
+        peak_running(total, [], seen, peak)
+    end
+  end
+
+  defp step_inference_request do
+    test_pid = self()
+
+    inference = fn request ->
+      send(test_pid, {:step_inference_request, request})
+      {:ok, %{output: %{"answer" => "done"}}}
+    end
+
+    assert {:ok, %{"answer" => "done"}} =
+             Runner.run_step(scripted_step(), %{},
+               inference: inference,
+               tools: [StepProbe],
+               tool_context: %{test_pid: test_pid}
+             )
+
+    assert_receive {:step_inference_request, request}
+    request
+  end
+
+  defp step_directions(directions, values) do
+    test_pid = self()
+
+    inference = fn request ->
+      send(test_pid, {:step_inference_request, request})
+      {:ok, %{output: %{"answer" => "done"}}}
+    end
+
+    assert {:ok, _} =
+             Runner.run_step(%{scripted_step() | directions: directions}, values,
+               inference: inference
+             )
+
+    assert_receive {:step_inference_request, %{directions: received}}
+    received
+  end
+
+  defp step_prompt(directions, values) do
+    script_model([{:answer, ~s({"answer":"done"})}])
+
+    assert {:ok, _} =
+             Runner.run_step(%{scripted_step() | directions: directions}, values, [])
+
+    assert [body] = model_bodies()
+    user_prompt(body)
+  end
+
+  defp run_step_prompt(directions, schema) do
+    """
+    #{directions}
+
+    Return only one JSON object satisfying this exact output contract:
+    #{Jason.encode!(schema)}
+
+    The quoted contract values are type declarations, not literal output
+    values. Emit actual JSON values of those types. In particular, an object
+    declaration such as "{ field: string }" requires a nested JSON object,
+    and an Array<...> declaration requires a JSON array; do not quote either.
+    """
+  end
+
+  defp script_model(replies) do
+    _ = model_bodies()
+
+    case Process.whereis(ScriptedModel) do
+      nil ->
+        previous = Req.default_options()
+        Req.default_options(Keyword.put(previous, :adapter, ScriptedModel))
+        on_exit(fn -> Req.default_options(previous) end)
+
+        start_supervised!(%{
+          id: ScriptedModel,
+          start: {ScriptedModel, :start_link, [self(), replies]}
+        })
+
+      _pid ->
+        ScriptedModel.replace(self(), replies)
+    end
+  end
+
+  defp model_bodies(acc \\ []) do
+    receive do
+      {:scripted_model_request, body} -> model_bodies([body | acc])
+    after
+      0 -> Enum.reverse(acc)
+    end
+  end
+
+  defp user_prompt(body) do
+    body["input"]
+    |> Enum.filter(&(&1["role"] == "user"))
+    |> Enum.map_join("\n", fn
+      %{"content" => content} when is_binary(content) -> content
+      %{"content" => parts} -> Enum.map_join(parts, "\n", & &1["text"])
+    end)
+  end
+
+  defp tool_outputs(body), do: Enum.filter(body["input"], &(&1["type"] == "function_call_output"))
 
   defp deliver_personal_reflection do
     Application.put_env(:jido_gralkor, :destination_storage, Gralkor.Destination.Storage.InMemory)
