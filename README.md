@@ -183,7 +183,7 @@ Everything `:jido_gralkor` reads, in one place. Nothing else is configurable —
 | Key | Type | Default | What it does |
 | --- | --- | --- | --- |
 | `:falkordb` | keyword: `:host`, `:port`, optional `:username`, `:password`, `:ssl` | unset | Remote FalkorDB connection. Wins over the embedded backend when both are set. `:ssl` defaults to `false`. Invalid shape raises `ArgumentError` at app start. See [Required configuration](#required-configuration). |
-| `:embedded_falkordb_socket_timeout_ms` | positive integer | `60_000` | Socket read timeout for the embedded FalkorDB connection, converted to seconds for `AsyncFalkorDB`. Ignored by remote FalkorDB. Invalid values raise `ArgumentError` when the embedded runtime starts. |
+| `:embedded_falkordb_socket_timeout_ms` | positive integer | `60_000` | Socket read timeout and maximum wait for a free connection in the embedded FalkorDB pool. Defaults to a 100-connection pool. Ignored by remote FalkorDB. Invalid values raise `ArgumentError` when the embedded runtime starts. |
 | `:remote_falkordb_socket_timeout_ms` | positive integer | `60_000` | Socket timeout for the remote FalkorDB connection, converted to seconds for `FalkorDB`. Ignored by embedded FalkorDB. |
 | `:graph_operation_deadline_ms` | positive integer | `1_800_000` | Deadline for one call into the graph library, inference included. On expiry the call is cancelled and returns `{:error, :timeout}`. |
 | `:client` | module implementing `Gralkor.Client` | `Gralkor.Client.Native` | The adapter. Set to `Gralkor.Client.InMemory` in tests; that value also suppresses the native supervision tree (Pythonx → GraphitiPool). |

@@ -3194,20 +3194,52 @@ defmodule Gralkor.GraphitiPool do
 
   # ── Defaults: real Pythonx-backed construction ──────────────
 
+  @waiting_connection_pool """
+  import asyncio
+  import redis.exceptions
+  from redis.asyncio.connection import BlockingConnectionPool
+  from redis.asyncio.retry import Retry
+  from redis.backoff import NoBackoff
+
+  class _WaitingConnectionPool(BlockingConnectionPool):
+      async def get_connection(self, *args, **kwargs):
+          try:
+              return await super().get_connection(*args, **kwargs)
+          except redis.exceptions.ConnectionError as err:
+              if isinstance(err.__cause__, asyncio.TimeoutError):
+                  raise redis.exceptions.TimeoutError(
+                      f"no FalkorDB connection was free within {self.timeout}s "
+                      f"(max_connections={self.max_connections})"
+                  ) from err
+              raise
+
+  def wait_for_connection(client, socket_timeout, max_connections):
+      built = client.connection_pool
+      client.connection_pool = _WaitingConnectionPool(
+          connection_class=built.connection_class,
+          max_connections=max_connections,
+          timeout=socket_timeout,
+          **{**built.connection_kwargs, 'retry': Retry(NoBackoff(), 0)},
+      )
+  """
+
   defp default_construct_falkor_db({:embedded, data_dir}, socket_timeout, nil) do
     db_path = Path.join(data_dir, "gralkor.db")
 
     {db, _} =
       Pythonx.eval(
         """
-        from redis.asyncio.retry import Retry
-        from redis.backoff import NoBackoff
+        #{@waiting_connection_pool}
         from redislite.async_falkordb_client import AsyncFalkorDB
-        AsyncFalkorDB(
+
+        database = AsyncFalkorDB(
           db_path.decode('utf-8') if isinstance(db_path, (bytes, bytearray)) else db_path,
           socket_timeout=socket_timeout,
           retry=Retry(NoBackoff(), 0),
         )
+        client = database.client._client
+        wait_for_connection(client, socket_timeout, client.connection_pool.max_connections)
+        database
         """,
         %{"db_path" => db_path, "socket_timeout" => socket_timeout}
       )
@@ -3225,27 +3257,8 @@ defmodule Gralkor.GraphitiPool do
     {db, _} =
       Pythonx.eval(
         """
-        import asyncio
-        import redis.exceptions
-        from redis.asyncio.connection import BlockingConnectionPool
-        from redis.asyncio.retry import Retry
-        from redis.backoff import NoBackoff
+        #{@waiting_connection_pool}
         from falkordb.asyncio import FalkorDB
-
-        # Waits up to the socket timeout for a free connection instead of
-        # failing at once with MaxConnectionsError, and reports a wait that
-        # runs out as a timeout.
-        class _WaitingConnectionPool(BlockingConnectionPool):
-            async def get_connection(self, *args, **kwargs):
-                try:
-                    return await super().get_connection(*args, **kwargs)
-                except redis.exceptions.ConnectionError as err:
-                    if isinstance(err.__cause__, asyncio.TimeoutError):
-                        raise redis.exceptions.TimeoutError(
-                            f"no FalkorDB connection was free within {self.timeout}s "
-                            f"(max_connections={self.max_connections})"
-                        ) from err
-                    raise
 
         h = host.decode('utf-8') if isinstance(host, (bytes, bytearray)) else host
         u = username.decode('utf-8') if isinstance(username, (bytes, bytearray)) else username
@@ -3261,16 +3274,8 @@ defmodule Gralkor.GraphitiPool do
             max_connections=max_connections,
         )
 
-        # FalkorDB(...) probes the server through a separate synchronous
-        # client, so its own asynchronous pool has opened no connection yet.
-        # Replace it with a waiting pool holding the same connection settings.
-        built = database.connection.connection_pool
-        database.connection.connection_pool = _WaitingConnectionPool(
-            connection_class=built.connection_class,
-            max_connections=max_connections,
-            timeout=socket_timeout,
-            **{**built.connection_kwargs, 'retry': Retry(NoBackoff(), 0)},
-        )
+        # The constructor probes through a separate synchronous client.
+        wait_for_connection(database.connection, socket_timeout, max_connections)
         database
         """,
         %{

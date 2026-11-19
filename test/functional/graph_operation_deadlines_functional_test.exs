@@ -377,6 +377,28 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
     end
   end
 
+  describe "while every embedded FalkorDB connection is in use > when another graph operation needs a connection > when a connection is released within the socket timeout" do
+    test "then the waiting operation completes with its result" do
+      with_embedded_connections_held(5_000, fn pool, database ->
+        waiter = Task.async(fn -> write(pool) end)
+        assert Task.yield(waiter, 250) == nil
+
+        release_embedded_connections(database, 1)
+        assert Task.await(waiter, 5_000) == :ok
+      end)
+    end
+  end
+
+  describe "while every embedded FalkorDB connection is in use > when another graph operation needs a connection > if no connection is released within the socket timeout" do
+    test "then the waiting operation returns `{:error, :timeout}`" do
+      with_embedded_connections_held(350, fn pool, _database ->
+        {elapsed_us, outcome} = :timer.tc(fn -> write(pool) end)
+        assert outcome == {:error, :timeout}
+        assert elapsed_us >= 350_000
+      end)
+    end
+  end
+
   defp write(pool) do
     GraphitiPool.add_episode(pool, "deadlines", "A write.", "notes", nil, [])
   end
@@ -502,6 +524,7 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
     {graph, _} =
       Pythonx.eval(
         """
+        from types import SimpleNamespace
         from graphiti_core.driver.falkordb_driver import FalkorDriver
 
         class _DriverBackedGraphiti:
@@ -510,6 +533,11 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
 
             async def add_episode(self, **kwargs):
                 await self.driver.execute_query('RETURN 1')
+                return SimpleNamespace(
+                    episode=SimpleNamespace(uuid='deadline-probe'),
+                    edges=[],
+                    nodes=[],
+                )
 
         _DriverBackedGraphiti()
         """,
@@ -577,6 +605,61 @@ defmodule Gralkor.GraphOperationDeadlinesFunctionalTest do
       )
 
     graph
+  end
+
+  defp with_embedded_connections_held(timeout_ms, check) do
+    data_dir =
+      Path.join(System.tmp_dir!(), "gralkor_full_pool_#{System.unique_integer([:positive])}")
+
+    on_exit(fn -> File.rm_rf!(data_dir) end)
+    parent = self()
+
+    pool =
+      start_pool(
+        falkordb_spec: {:embedded, data_dir},
+        embedded_falkordb_socket_timeout_ms: timeout_ms,
+        graph_operation_deadline_ms: 60_000,
+        construct_instance: fn database, shared, group_id ->
+          send(parent, {:embedded_database, database})
+          driver_backed_graph(database, shared, group_id)
+        end
+      )
+
+    GraphitiPool.for(pool, "deadlines")
+    assert_received {:embedded_database, database}
+
+    Gralkor.Python.run_coroutine(
+      """
+      async def hold_all():
+          pool = database.client._client.connection_pool
+          database._test_held_connections = []
+          for _ in range(pool.max_connections):
+              database._test_held_connections.append(await pool.get_connection())
+      hold_all()
+      """,
+      %{"database" => database}
+    )
+
+    try do
+      check.(pool, database)
+    after
+      release_embedded_connections(database, nil)
+    end
+  end
+
+  defp release_embedded_connections(database, limit) do
+    Gralkor.Python.run_coroutine(
+      """
+      async def release():
+          pool = database.client._client.connection_pool
+          held = database._test_held_connections
+          count = len(held) if limit is None else limit
+          for _ in range(count):
+              await pool.release(held.pop())
+      release()
+      """,
+      %{"database" => database, "limit" => limit}
+    )
   end
 
   # Answers the connection handshake as a live server would, then never replies

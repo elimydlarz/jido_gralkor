@@ -55,6 +55,13 @@ while every remote FalkorDB connection is in use
       then the waiting operation returns `{:error, :timeout}`
       and the timeout is logged with the stage it hit
 
+while every embedded FalkorDB connection is in use
+  when another graph operation needs a connection
+    when a connection is released within the socket timeout
+      then the waiting operation completes with its result
+    if no connection is released within the socket timeout
+      then the waiting operation returns `{:error, :timeout}`
+
 while more episode writes are waiting on the graph or a model provider than the virtual machine has dirty CPU schedulers
   then a memory search still returns its results without waiting for them
   and each waiting write returns once its wait ends

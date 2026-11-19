@@ -9,9 +9,10 @@ defmodule Gralkor.Config do
       remote (network `host:port` plus optional credentials, set via the
       `:jido_gralkor, :falkordb` application env). Remote wins when both are
       configured. See `falkordb_spec/0`.
-    * The embedded FalkorDB socket read timeout — configured in milliseconds as
-      `:embedded_falkordb_socket_timeout_ms`, defaulting to 60 seconds. It is
-      validated only when the embedded backend starts.
+    * The embedded FalkorDB socket timeout — configured in milliseconds as
+      `:embedded_falkordb_socket_timeout_ms`, defaulting to 60 seconds. It
+      also bounds the wait for a free connection when the embedded pool is
+      full. It is validated only when the embedded backend starts.
     * The remote FalkorDB socket timeout — configured in milliseconds as
       `:remote_falkordb_socket_timeout_ms`, defaulting to 60 seconds. It is
       validated only when the remote backend starts.

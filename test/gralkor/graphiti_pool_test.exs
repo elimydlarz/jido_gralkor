@@ -334,7 +334,14 @@ defmodule Gralkor.GraphitiPoolTest do
 
     log =
       capture_log(fn ->
-        send(parent, {:captured_stderr, capture_io(:stderr, operation)})
+        stderr =
+          capture_io(:stderr, fn ->
+            operation.()
+            # A raising eval skips Pythonx's wait for pending output.
+            Pythonx.eval("None", %{})
+          end)
+
+        send(parent, {:captured_stderr, stderr})
       end)
 
     assert_received {:captured_stderr, stderr}
